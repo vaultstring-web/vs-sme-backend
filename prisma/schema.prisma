@@ -1,0 +1,158 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model User {
+  id                   String           @id @default(uuid())
+  email                String           @unique
+  passwordHash         String
+  fullName             String
+  nationalIdOrPassport String
+  primaryPhone         String
+  secondaryPhone       String?
+  physicalAddress      String
+  postalAddress        String?
+  role                 Role             @default(APPLICANT)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  applications         Application[]
+  auditLogs            AuditLog[]       @relation("ActorLogs")
+}
+
+enum Role {
+  APPLICANT
+  ADMIN_TIER1
+  ADMIN_TIER2
+}
+
+model Application {
+  id              String                  @id @default(uuid())
+  userId          String
+  user            User                    @relation(fields: [userId], references: [id])
+  type            AppType
+  status          AppStatus               @default(DRAFT)
+  submittedAt     DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  smeData         SmeApplicationData?
+  payrollData     PayrollApplicationData?
+  documents       Document[]
+  auditLogs       AuditLog[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+enum AppType {
+  SME
+  PAYROLL
+}
+
+enum AppStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DISBURSED
+  REPAYED
+  DEFAULTED
+}
+
+model SmeApplicationData {
+  id                        String    @id @default(uuid())
+  application               Application @relation(fields: [applicationId], references: [id])
+  applicationId             String    @unique
+
+  businessName              String
+  registrationNo            String?
+  businessType              String
+  yearsInOperation          Int
+  loanProduct               String
+  loanAmount                Float     // in MWK
+  paybackPeriodMonths       Int
+  purposeOfLoan             String
+  repaymentMethod           String
+  estimatedMonthlyTurnover  Float?
+  estimatedMonthlyProfit    Float?
+  groupName                 String?
+  groupMemberCount          Int?
+  hasOutstandingLoans       Boolean
+  outstandingLoanDetails    String?   // JSON or structured string
+  hasDefaulted              Boolean
+  defaultExplanation        String?
+
+  // Timestamp is captured via Application.createdAt
+}
+
+model PayrollApplicationData {
+  id                        String    @id @default(uuid())
+  application               Application @relation(fields: [applicationId], references: [id])
+  applicationId             String    @unique
+
+  dateOfBirth               DateTime
+  gender                    String
+  maritalStatus             String
+  nextOfKinName             String
+  nextOfKinRelationship     String
+  nextOfKinPhone            String
+  loanAmount                Float     // in MWK
+  paybackPeriodMonths       Int
+  employerName              String
+  employerAddress           String
+  jobTitle                  String
+  employeeNumber            String
+  dateOfEmployment          DateTime
+  grossMonthlySalary        Float
+  netMonthlySalary          Float
+  payrollDeductionConfirmed Boolean
+
+  hasOutstandingLoans       Boolean
+  outstandingLoanDetails    String?   // Lender, amount, balance, repayment
+  hasDefaulted              Boolean
+  defaultExplanation        String?
+
+  // Timestamp is captured via Application.createdAt
+}
+
+model Document {
+  id            String    @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  fileName      String
+  fileUrl       String    // e.g., Google Drive shareable link
+  documentType  String    // e.g., "national_id", "payslip", "business_proof"
+  uploadedAt    DateTime  @default(now())
+
+  @@index([applicationId])
+}
+
+model AuditLog {
+  id            String    @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  actorId       String
+  actor         User      @relation("ActorLogs", fields: [actorId], references: [id])
+  action        String    // e.g., "SUBMITTED", "APPROVED", "REJECTED"
+  notes         String?
+  timestamp     DateTime  @default(now())
+
+  @@index([applicationId])
+  @@index([actorId])
+}
