@@ -8,7 +8,7 @@ const app: Express = express();
 // Logging
 app.use(successLogger);
 app.use(errorLogger);
-
+         
 // Security
 setupSecurityMiddleware(app);
 
