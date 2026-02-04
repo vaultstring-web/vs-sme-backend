@@ -1,0 +1,114 @@
+@baseUrl = http://localhost:3000/api
+@contentType = application/json
+
+### 1. Register a new user (Applicant)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com",
+  "password": "Password123!",
+  "fullName": "John Doe",
+  "nationalId": "ABC1234567",
+  "primaryPhone": "+265123456789",
+  "secondaryPhone": "+265987654321",
+  "physicalAddress": "123 Main Street, Lilongwe",
+  "postalAddress": "P.O. Box 123, Lilongwe"
+}
+
+### 2. Register another user (for testing)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant2@example.com",
+  "password": "Password123!",
+  "fullName": "Jane Smith",
+  "nationalId": "XYZ9876543",
+  "primaryPhone": "+265111223344",
+  "physicalAddress": "456 Business Ave, Blantyre"
+}
+
+### 3. Try to register with same email (should fail)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com",
+  "password": "DifferentPass123!",
+  "fullName": "Duplicate User",
+  "nationalId": "NEW1234567",
+  "primaryPhone": "+265555666777",
+  "physicalAddress": "789 New Street"
+}
+
+### 4. Login with valid credentials
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com",
+  "password": "Password123!"
+}
+
+### 5. Login with invalid password
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com",
+  "password": "WrongPassword!"
+}
+
+### 6. Login with non-existent email
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "nonexistent@example.com",
+  "password": "Password123!"
+}
+
+### 7. Get current token from login response and save to variable
+# Run login first, copy the token from response, then update below
+@authToken = token
+
+### 8. Logout (requires authentication)
+POST {{baseUrl}}/auth/logout
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+### 9. Request password reset for existing user
+POST {{baseUrl}}/auth/password-reset/request
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com"
+}
+
+### 10. Request password reset for non-existent user (should still return success for security)
+POST {{baseUrl}}/auth/password-reset/request
+Content-Type: {{contentType}}
+
+{
+  "email": "notfound@example.com"
+}
+
+### 11. Confirm password reset with token (update token from reset email)
+# Note: In development, the reset token is returned in the response
+POST {{baseUrl}}/auth/password-reset/confirm
+Content-Type: {{contentType}}
+
+{
+  "token": "token",
+  "newPassword": "NewPassword456!"
+}
+
+### 12. Login with new password after reset
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "applicant1@example.com",
+  "password": "NewPassword456!"
+}

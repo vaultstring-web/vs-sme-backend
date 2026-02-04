@@ -1,0 +1,100 @@
+@baseUrl = http://localhost:3000/api
+@contentType = application/json
+
+### 0. Login as Admin (To get the token for subsequent requests)
+# @name adminLogin
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@example.com",
+  "password": "AdminPass123!"
+}
+
+#### Extract token from the login response
+@adminToken = {{adminLogin.response.body.accessToken}}
+
+# ==========================================
+# ADMIN USER MANAGEMENT
+# ==========================================
+
+### 1. List Users (Admin Tier 1+)
+# Supports: page, limit, role, search
+GET {{baseUrl}}/auth/admin/users?role=APPLICANT&limit=5
+Authorization: Bearer {{adminToken}}
+
+### 2. Search Users (Admin Tier 1+)
+GET {{baseUrl}}/auth/admin/users?search=Duane
+Authorization: Bearer {{adminToken}}
+
+### 3. Get Specific User Details (Admin Tier 1+)
+# Replace with a real ID from the List Users response
+@userId = 02ede6e4-58d8-4862-b257-3ed6e6724e3f
+GET {{baseUrl}}/auth/admin/users/{{userId}}
+Authorization: Bearer {{adminToken}}
+
+### 4. Admin Register New Admin (Admin Tier 1+)
+# Note: Tier 1 can create other admins per routes.ts
+POST {{baseUrl}}/auth/admin/register
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "email": "tier2admin@example.com",
+  "password": "SecurePass123!",
+  "fullName": "Tier 2 Supervisor",
+  "role": "ADMIN_TIER2",
+  "nationalId": "ADMIN_T2_001",
+  "primaryPhone": "+265888123456",
+  "physicalAddress": "Capital Hill, Lilongwe"
+}
+
+### 5. Update User Profile (Admin Tier 1+)
+# Updates basic info like phone and address
+PATCH {{baseUrl}}/auth/admin/users/{{userId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "John Doe Updated",
+  "primaryPhone": "+265999000111",
+  "secondaryPhone": null,
+  "physicalAddress": "Area 47, Lilongwe"
+}
+
+### 6. Promote User Role (Requires ADMIN_TIER2)
+# The controller logic checks if req.user.role === 'ADMIN_TIER2'
+PATCH {{baseUrl}}/auth/admin/users/{{userId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "role": "ADMIN_TIER1"
+}
+
+### 7. Delete User (Requires ADMIN_TIER2)
+# Note: Controller prevents self-deletion
+DELETE {{baseUrl}}/auth/admin/users/{{userId}}
+Authorization: Bearer {{adminToken}}
+
+# ==========================================
+# ERROR HANDLING / VALIDATION
+# ==========================================
+
+### 8. Try to access Admin list without token (Should fail 401)
+GET {{baseUrl}}/auth/admin/users
+
+### 9. Try to register user with invalid role
+POST {{baseUrl}}/auth/admin/register
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "email": "badrole@example.com",
+  "password": "Password123!",
+  "fullName": "Bad Role",
+  "role": "SUPERUSER", 
+  "nationalId": "BAD123",
+  "primaryPhone": "+265111111",
+  "physicalAddress": "Invalid St"
+}
