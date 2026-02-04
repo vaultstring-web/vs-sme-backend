@@ -36,7 +36,13 @@ export function signAccessToken(user: AccessTokenUser): { token: string; jti: st
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  const decoded = jwt.verify(token, env.JWT_SECRET as jwt.Secret)
+  let decoded: string | jwt.JwtPayload;
+  try {
+    decoded = jwt.verify(token, env.JWT_SECRET as jwt.Secret)
+  } catch (error) {
+    throw new AppError('Invalid token', 401)
+  }
+
   if (!decoded || typeof decoded === 'string' || typeof decoded !== 'object') {
     throw new AppError('Invalid token', 401)
   }

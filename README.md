@@ -62,7 +62,10 @@ Local Setup
    or
    npm run db:generate
 
-6. Start the development server
+6. Adding default Admin User
+   pnpm run create-admin
+
+7. Start the development server
    pnpm run dev
    or
    npm run dev
