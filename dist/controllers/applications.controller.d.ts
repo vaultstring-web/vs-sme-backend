@@ -1,0 +1,10 @@
+import type { NextFunction, Request, Response } from 'express';
+export declare function validateSmePayload(req: Request, _res: Response, next: NextFunction): void;
+export declare function validatePayrollPayload(req: Request, _res: Response, next: NextFunction): void;
+export declare function validateDocumentPayload(req: Request, _res: Response, next: NextFunction): void;
+export declare function validateDraftPayload(req: Request, _res: Response, next: NextFunction): void;
+export declare function createSmeApplication(req: Request, res: Response, next: NextFunction): Promise<void>;
+export declare function createPayrollApplication(req: Request, res: Response, next: NextFunction): Promise<void>;
+export declare function saveDraftApplication(req: Request, res: Response, next: NextFunction): Promise<void>;
+export declare function uploadDocument(req: Request, res: Response, next: NextFunction): Promise<void>;
+export declare function submitApplication(req: Request, res: Response, next: NextFunction): Promise<void>;

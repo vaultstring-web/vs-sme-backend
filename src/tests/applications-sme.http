@@ -1,0 +1,53 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "AdminPass123!"
+}
+
+### Create SME (valid)
+POST {{baseUrl}}/api/applications/sme
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "businessName": "Acme Retail",
+  "registrationNo": "REG-123",
+  "businessType": "Retail",
+  "yearsInOperation": 5,
+  "loanProduct": "Working Capital",
+  "loanAmount": 500000,
+  "paybackPeriodMonths": 12,
+  "purposeOfLoan": "Inventory",
+  "repaymentMethod": "Monthly",
+  "estimatedMonthlyTurnover": 1000000,
+  "estimatedMonthlyProfit": 150000,
+  "groupName": null,
+  "groupMemberCount": null,
+  "hasOutstandingLoans": false,
+  "outstandingLoanDetails": null,
+  "hasDefaulted": false,
+  "defaultExplanation": null
+}
+
+### Create SME (invalid missing businessName)
+POST {{baseUrl}}/api/applications/sme
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "businessType": "Retail",
+  "yearsInOperation": 5,
+  "loanProduct": "Working Capital",
+  "loanAmount": 500000,
+  "paybackPeriodMonths": 12,
+  "purposeOfLoan": "Inventory",
+  "repaymentMethod": "Monthly",
+  "hasOutstandingLoans": false,
+  "hasDefaulted": false
+}

@@ -1,0 +1,21 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+@appId = REPLACE_WITH_APP_ID
+
+### Save Draft (SME)
+PATCH {{baseUrl}}/api/applications/{{appId}}/draft
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "estimatedMonthlyProfit": 200000
+}
+
+### Save Draft (invalid id)
+PATCH {{baseUrl}}/api/applications/invalid-id/draft
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "estimatedMonthlyProfit": 200000
+}

@@ -1,0 +1,24 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+@appId = REPLACE_WITH_APP_ID
+
+### Add Document (valid)
+POST {{baseUrl}}/api/applications/{{appId}}/documents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "fileName": "doc.pdf",
+  "fileUrl": "https://example.com/doc.pdf",
+  "documentType": "business_proof"
+}
+
+### Add Document (missing fileName)
+POST {{baseUrl}}/api/applications/{{appId}}/documents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "fileUrl": "https://example.com/doc.pdf",
+  "documentType": "business_proof"
+}

@@ -1,15 +1,55 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = register;
 exports.login = login;
+exports.refreshToken = refreshToken;
 exports.logout = logout;
 exports.requestPasswordReset = requestPasswordReset;
 exports.confirmPasswordReset = confirmPasswordReset;
+exports.adminRegister = adminRegister;
+exports.listUsers = listUsers;
+exports.getUser = getUser;
+exports.updateUser = updateUser;
+exports.deleteUser = deleteUser;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const logger_1 = require("../config/logger");
 const prisma_1 = require("../db/prisma");
 const AppError_1 = require("../utils/AppError");
 const jwt_service_1 = require("../services/jwt.service");
@@ -31,14 +71,18 @@ function parsePhones(body) {
     if (body?.phones && typeof body.phones === 'object') {
         const primary = body.phones.primary ?? body.phones.primaryPhone;
         const secondary = body.phones.secondary ?? body.phones.secondaryPhone;
-        if (!isNonEmptyString(primary))
+        if (!isNonEmptyString(primary)) {
+            logger_1.logger.warn('Registration attempt without phones.primary');
             throw new AppError_1.AppError('phones.primary is required', 400);
+        }
         return { primaryPhone: primary.trim(), secondaryPhone: isNonEmptyString(secondary) ? secondary.trim() : undefined };
     }
     const primaryPhone = body?.primaryPhone;
     const secondaryPhone = body?.secondaryPhone;
-    if (!isNonEmptyString(primaryPhone))
+    if (!isNonEmptyString(primaryPhone)) {
+        logger_1.logger.warn('Registration attempt without primaryPhone');
         throw new AppError_1.AppError('primaryPhone is required', 400);
+    }
     return {
         primaryPhone: primaryPhone.trim(),
         secondaryPhone: isNonEmptyString(secondaryPhone) ? secondaryPhone.trim() : undefined,
@@ -48,14 +92,18 @@ function parseAddresses(body) {
     if (body?.addresses && typeof body.addresses === 'object') {
         const physical = body.addresses.physical ?? body.addresses.physicalAddress;
         const postal = body.addresses.postal ?? body.addresses.postalAddress;
-        if (!isNonEmptyString(physical))
+        if (!isNonEmptyString(physical)) {
+            logger_1.logger.warn('Registration attempt without addresses.physical');
             throw new AppError_1.AppError('addresses.physical is required', 400);
+        }
         return { physicalAddress: physical.trim(), postalAddress: isNonEmptyString(postal) ? postal.trim() : undefined };
     }
     const physicalAddress = body?.physicalAddress;
     const postalAddress = body?.postalAddress;
-    if (!isNonEmptyString(physicalAddress))
+    if (!isNonEmptyString(physicalAddress)) {
+        logger_1.logger.warn('Registration attempt without physicalAddress');
         throw new AppError_1.AppError('physicalAddress is required', 400);
+    }
     return {
         physicalAddress: physicalAddress.trim(),
         postalAddress: isNonEmptyString(postalAddress) ? postalAddress.trim() : undefined,
@@ -63,8 +111,10 @@ function parseAddresses(body) {
 }
 function parseNationalId(body) {
     const nationalId = body?.nationalId ?? body?.nationalIdOrPassport;
-    if (!isNonEmptyString(nationalId))
+    if (!isNonEmptyString(nationalId)) {
+        logger_1.logger.warn('Registration attempt without nationalId');
         throw new AppError_1.AppError('nationalId is required', 400);
+    }
     return nationalId.trim();
 }
 function prismaErrorCode(err) {
@@ -72,19 +122,30 @@ function prismaErrorCode(err) {
         return undefined;
     return typeof err.code === 'string' ? err.code : undefined;
 }
+// ========== PUBLIC ENDPOINTS ==========
 async function register(req, res, next) {
+    const startTime = Date.now();
     try {
         const emailRaw = req.body?.email;
         const password = req.body?.password;
         const fullName = req.body?.fullName;
-        if (!isNonEmptyString(emailRaw))
+        logger_1.logger.info(`Registration attempt: ${emailRaw ? emailRaw : 'No email provided'}`);
+        if (!isNonEmptyString(emailRaw)) {
+            logger_1.logger.warn('Registration attempt without email');
             throw new AppError_1.AppError('email is required', 400);
-        if (!isNonEmptyString(password))
+        }
+        if (!isNonEmptyString(password)) {
+            logger_1.logger.warn('Registration attempt without password');
             throw new AppError_1.AppError('password is required', 400);
-        if (password.trim().length < 8)
+        }
+        if (password.trim().length < 8) {
+            logger_1.logger.warn('Registration attempt with password less than 8 characters');
             throw new AppError_1.AppError('password must be at least 8 characters', 400);
-        if (!isNonEmptyString(fullName))
+        }
+        if (!isNonEmptyString(fullName)) {
+            logger_1.logger.warn('Registration attempt without fullName');
             throw new AppError_1.AppError('fullName is required', 400);
+        }
         const { primaryPhone, secondaryPhone } = parsePhones(req.body);
         const { physicalAddress, postalAddress } = parseAddresses(req.body);
         const nationalIdOrPassport = parseNationalId(req.body);
@@ -100,66 +161,193 @@ async function register(req, res, next) {
                 secondaryPhone,
                 physicalAddress,
                 postalAddress,
+                role: 'APPLICANT',
             },
             select: { id: true, email: true, fullName: true, role: true },
+        });
+        logger_1.logger.info(`User registered successfully: ${user.id} - ${user.email}`, {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            duration: Date.now() - startTime
         });
         res.status(201).json({ profile: user });
     }
     catch (err) {
-        if (prismaErrorCode(err) === 'P2002')
+        const duration = Date.now() - startTime;
+        if (prismaErrorCode(err) === 'P2002') {
+            logger_1.logger.warn(`Email already in use during registration`, {
+                email: req.body?.email,
+                duration
+            });
             return next(new AppError_1.AppError('Email already in use', 409));
+        }
+        logger_1.logger.error(`Registration failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            email: req.body?.email,
+            duration
+        });
         next(err);
     }
 }
 async function login(req, res, next) {
+    const startTime = Date.now();
     try {
         const emailRaw = req.body?.email;
         const password = req.body?.password;
-        if (!isNonEmptyString(emailRaw))
+        logger_1.logger.http(`Login attempt: ${emailRaw || 'No email provided'}`);
+        if (!isNonEmptyString(emailRaw)) {
+            logger_1.logger.warn('Login attempt without email');
             throw new AppError_1.AppError('email is required', 400);
-        if (!isNonEmptyString(password))
+        }
+        if (!isNonEmptyString(password)) {
+            logger_1.logger.warn('Login attempt without password');
             throw new AppError_1.AppError('password is required', 400);
+        }
         const email = normalizeEmail(emailRaw);
         const user = await prisma_1.prisma.user.findUnique({
             where: { email },
             select: { id: true, email: true, fullName: true, role: true, passwordHash: true },
         });
-        if (!user)
+        if (!user) {
+            logger_1.logger.warn(`Login failed: User not found for email ${email}`);
             throw new AppError_1.AppError('Invalid credentials', 401);
+        }
         const ok = await bcrypt_1.default.compare(password, user.passwordHash);
-        if (!ok)
+        if (!ok) {
+            logger_1.logger.warn(`Login failed: Invalid password for user ${user.id} (${email})`);
             throw new AppError_1.AppError('Invalid credentials', 401);
-        const { token } = (0, jwt_service_1.signAccessToken)({ id: user.id, email: user.email, role: user.role });
+        }
+        const { token: accessToken, jti: accessJti } = (0, jwt_service_1.signAccessToken)({
+            id: user.id,
+            email: user.email,
+            role: user.role
+        });
+        const { token: refreshToken, jti: refreshJti } = (0, jwt_service_1.signRefreshToken)(user.id);
+        await prisma_1.prisma.denylistedToken.create({
+            data: {
+                userId: user.id,
+                jti: refreshJti,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+        });
+        logger_1.logger.info(`User logged in successfully: ${user.id} - ${user.email}`, {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            accessJti,
+            refreshJti,
+            duration: Date.now() - startTime
+        });
         res.json({
-            token,
-            profile: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
+            accessToken,
+            refreshToken,
+            profile: {
+                id: user.id,
+                email: user.email,
+                fullName: user.fullName,
+                role: user.role
+            },
         });
     }
     catch (err) {
+        logger_1.logger.error(`Login failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            email: req.body?.email,
+            duration: Date.now() - startTime
+        });
+        next(err);
+    }
+}
+async function refreshToken(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const refreshToken = req.body?.refreshToken;
+        logger_1.logger.http('Refresh token attempt');
+        if (!isNonEmptyString(refreshToken)) {
+            logger_1.logger.warn('Refresh token attempt without token');
+            throw new AppError_1.AppError('refreshToken is required', 400);
+        }
+        const { verifyRefreshToken } = await Promise.resolve().then(() => __importStar(require('../services/jwt.service')));
+        const payload = verifyRefreshToken(refreshToken);
+        const denylisted = await prisma_1.prisma.denylistedToken.findUnique({
+            where: { jti: payload.jti },
+        });
+        if (denylisted) {
+            logger_1.logger.warn(`Refresh token revoked: ${payload.jti}`);
+            throw new AppError_1.AppError('Refresh token revoked', 401);
+        }
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: { id: true, email: true, role: true },
+        });
+        if (!user) {
+            logger_1.logger.warn(`Refresh token failed: User not found ${payload.sub}`);
+            throw new AppError_1.AppError('User not found', 401);
+        }
+        const { token: newAccessToken, jti: newAccessJti } = (0, jwt_service_1.signAccessToken)({
+            id: user.id,
+            email: user.email,
+            role: user.role,
+        });
+        logger_1.logger.info(`Token refreshed successfully for user: ${user.id}`, {
+            userId: user.id,
+            oldJti: payload.jti,
+            newAccessJti,
+            duration: Date.now() - startTime
+        });
+        res.json({
+            accessToken: newAccessToken,
+            profile: { id: user.id, email: user.email, role: user.role },
+        });
+    }
+    catch (err) {
+        logger_1.logger.error(`Token refresh failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            duration: Date.now() - startTime
+        });
         next(err);
     }
 }
 async function logout(req, res, next) {
+    const startTime = Date.now();
     try {
-        if (!req.user)
+        if (!req.user) {
+            logger_1.logger.warn('Logout attempt without authentication');
             throw new AppError_1.AppError('Unauthorized', 401);
+        }
         const expiresAt = getJwtExpiresAt(req.user.token);
         await prisma_1.prisma.denylistedToken.upsert({
             where: { jti: req.user.jti },
             create: { jti: req.user.jti, userId: req.user.id, expiresAt },
             update: { expiresAt },
         });
+        logger_1.logger.info(`User logged out: ${req.user.id}`, {
+            userId: req.user.id,
+            email: req.user.email,
+            jti: req.user.jti,
+            duration: Date.now() - startTime
+        });
         res.json({ success: true });
     }
     catch (err) {
+        logger_1.logger.error(`Logout failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            userId: req.user?.id,
+            duration: Date.now() - startTime
+        });
         next(err);
     }
 }
 async function requestPasswordReset(req, res, next) {
+    const startTime = Date.now();
     try {
         const emailRaw = req.body?.email;
-        if (!isNonEmptyString(emailRaw))
+        logger_1.logger.http(`Password reset request for: ${emailRaw || 'No email provided'}`);
+        if (!isNonEmptyString(emailRaw)) {
+            logger_1.logger.warn('Password reset request without email');
             throw new AppError_1.AppError('email is required', 400);
+        }
         const email = normalizeEmail(emailRaw);
         const user = await prisma_1.prisma.user.findUnique({ where: { email }, select: { id: true } });
         let resetToken;
@@ -170,6 +358,15 @@ async function requestPasswordReset(req, res, next) {
             });
             if (process.env.NODE_ENV !== 'production')
                 resetToken = token;
+            logger_1.logger.info(`Password reset token generated for user: ${user.id}`, {
+                userId: user.id,
+                email,
+                expiresAt,
+                duration: Date.now() - startTime
+            });
+        }
+        else {
+            logger_1.logger.warn(`Password reset request for non-existent email: ${email}`);
         }
         res.json({
             success: true,
@@ -178,25 +375,39 @@ async function requestPasswordReset(req, res, next) {
         });
     }
     catch (err) {
+        logger_1.logger.error(`Password reset request failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            email: req.body?.email,
+            duration: Date.now() - startTime
+        });
         next(err);
     }
 }
 async function confirmPasswordReset(req, res, next) {
+    const startTime = Date.now();
     try {
         const token = req.body?.token;
         const newPassword = req.body?.newPassword;
-        if (!isNonEmptyString(token))
+        logger_1.logger.http('Password reset confirmation attempt');
+        if (!isNonEmptyString(token)) {
+            logger_1.logger.warn('Password reset confirmation without token');
             throw new AppError_1.AppError('token is required', 400);
-        if (!isNonEmptyString(newPassword))
+        }
+        if (!isNonEmptyString(newPassword)) {
+            logger_1.logger.warn('Password reset confirmation without newPassword');
             throw new AppError_1.AppError('newPassword is required', 400);
-        if (newPassword.trim().length < 8)
+        }
+        if (newPassword.trim().length < 8) {
+            logger_1.logger.warn('Password reset confirmation with password less than 8 characters');
             throw new AppError_1.AppError('newPassword must be at least 8 characters', 400);
+        }
         const tokenHash = (0, passwordReset_service_1.hashPasswordResetToken)(token.trim());
         const record = await prisma_1.prisma.passwordResetToken.findUnique({
             where: { tokenHash },
             select: { id: true, userId: true, expiresAt: true, usedAt: true },
         });
         if (!record || record.usedAt || record.expiresAt.getTime() <= Date.now()) {
+            logger_1.logger.warn(`Invalid or expired password reset token attempted`);
             throw new AppError_1.AppError('Invalid or expired token', 400);
         }
         const passwordHash = await bcrypt_1.default.hash(newPassword, 12);
@@ -204,9 +415,335 @@ async function confirmPasswordReset(req, res, next) {
             prisma_1.prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
             prisma_1.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
         ]);
+        logger_1.logger.info(`Password reset completed for user: ${record.userId}`, {
+            userId: record.userId,
+            resetTokenId: record.id,
+            duration: Date.now() - startTime
+        });
         res.json({ success: true });
     }
     catch (err) {
+        logger_1.logger.error(`Password reset confirmation failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            duration: Date.now() - startTime
+        });
+        next(err);
+    }
+}
+// ========== ADMIN-ONLY ENDPOINTS ==========
+async function adminRegister(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const emailRaw = req.body?.email;
+        const password = req.body?.password;
+        const fullName = req.body?.fullName;
+        const role = req.body?.role;
+        logger_1.logger.info(`Admin registration attempt by ${req.user?.id} for email: ${emailRaw}`);
+        if (!isNonEmptyString(emailRaw)) {
+            logger_1.logger.warn('Admin registration attempt without email');
+            throw new AppError_1.AppError('email is required', 400);
+        }
+        if (!isNonEmptyString(password)) {
+            logger_1.logger.warn('Admin registration attempt without password');
+            throw new AppError_1.AppError('password is required', 400);
+        }
+        if (password.trim().length < 8) {
+            logger_1.logger.warn('Admin registration attempt with password less than 8 characters');
+            throw new AppError_1.AppError('password must be at least 8 characters', 400);
+        }
+        if (!isNonEmptyString(fullName)) {
+            logger_1.logger.warn('Admin registration attempt without fullName');
+            throw new AppError_1.AppError('fullName is required', 400);
+        }
+        if (!role || !['ADMIN_TIER1', 'ADMIN_TIER2', 'APPLICANT'].includes(role)) {
+            logger_1.logger.warn(`Admin registration attempt with invalid role: ${role}`);
+            throw new AppError_1.AppError('Invalid role. Must be ADMIN_TIER1, ADMIN_TIER2, or APPLICANT', 400);
+        }
+        const { primaryPhone, secondaryPhone } = parsePhones(req.body);
+        const { physicalAddress, postalAddress } = parseAddresses(req.body);
+        const nationalIdOrPassport = parseNationalId(req.body);
+        const email = normalizeEmail(emailRaw);
+        const passwordHash = await bcrypt_1.default.hash(password, 12);
+        const user = await prisma_1.prisma.user.create({
+            data: {
+                email,
+                passwordHash,
+                fullName: fullName.trim(),
+                nationalIdOrPassport,
+                primaryPhone,
+                secondaryPhone,
+                physicalAddress,
+                postalAddress,
+                role,
+            },
+            select: { id: true, email: true, fullName: true, role: true, createdAt: true },
+        });
+        logger_1.logger.info(`Admin created user successfully: ${user.id} - ${user.email}`, {
+            createdBy: req.user?.id,
+            newUserId: user.id,
+            newUserEmail: user.email,
+            newUserRole: user.role,
+            duration: Date.now() - startTime
+        });
+        res.status(201).json({
+            message: 'User created successfully',
+            user
+        });
+    }
+    catch (err) {
+        const duration = Date.now() - startTime;
+        if (prismaErrorCode(err) === 'P2002') {
+            logger_1.logger.warn(`Admin registration failed: Email already in use`, {
+                email: req.body?.email,
+                createdBy: req.user?.id,
+                duration
+            });
+            return next(new AppError_1.AppError('Email already in use', 409));
+        }
+        logger_1.logger.error(`Admin registration failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            email: req.body?.email,
+            createdBy: req.user?.id,
+            duration
+        });
+        next(err);
+    }
+}
+async function listUsers(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const { page = '1', limit = '10', role, search } = req.query;
+        logger_1.logger.http(`List users request by ${req.user?.id}`, {
+            page, limit, role, search
+        });
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const skip = (pageNum - 1) * limitNum;
+        const where = {};
+        if (role && ['APPLICANT', 'ADMIN_TIER1', 'ADMIN_TIER2'].includes(role)) {
+            where.role = role;
+        }
+        if (search && typeof search === 'string') {
+            where.OR = [
+                { email: { contains: search, mode: 'insensitive' } },
+                { fullName: { contains: search, mode: 'insensitive' } },
+                { nationalIdOrPassport: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+        const [users, total] = await Promise.all([
+            prisma_1.prisma.user.findMany({
+                where,
+                select: {
+                    id: true,
+                    email: true,
+                    fullName: true,
+                    role: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limitNum,
+            }),
+            prisma_1.prisma.user.count({ where }),
+        ]);
+        logger_1.logger.info(`Users listed successfully`, {
+            requestedBy: req.user?.id,
+            page: pageNum,
+            limit: limitNum,
+            totalUsers: total,
+            filteredCount: users.length,
+            duration: Date.now() - startTime
+        });
+        res.json({
+            users,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum),
+            },
+        });
+    }
+    catch (err) {
+        logger_1.logger.error(`List users failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            requestedBy: req.user?.id,
+            duration: Date.now() - startTime
+        });
+        next(err);
+    }
+}
+async function getUser(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const { id } = req.params;
+        logger_1.logger.http(`Get user request by ${req.user?.id} for user ${id}`);
+        if (typeof id !== 'string') {
+            logger_1.logger.warn(`Invalid ID parameter: ${id}`);
+            throw new AppError_1.AppError('Invalid ID parameter', 400);
+        }
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                nationalIdOrPassport: true,
+                primaryPhone: true,
+                secondaryPhone: true,
+                physicalAddress: true,
+                postalAddress: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
+                applications: {
+                    select: {
+                        id: true,
+                        type: true,
+                        status: true,
+                        createdAt: true,
+                    },
+                },
+            },
+        });
+        if (!user) {
+            logger_1.logger.warn(`User not found: ${id} requested by ${req.user?.id}`);
+            throw new AppError_1.AppError('User not found', 404);
+        }
+        logger_1.logger.info(`User details retrieved: ${id}`, {
+            requestedBy: req.user?.id,
+            targetUser: id,
+            duration: Date.now() - startTime
+        });
+        res.json({ user });
+    }
+    catch (err) {
+        logger_1.logger.error(`Get user failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            requestedBy: req.user?.id,
+            targetUser: req.params.id,
+            duration: Date.now() - startTime
+        });
+        next(err);
+    }
+}
+async function updateUser(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const { id } = req.params;
+        logger_1.logger.info(`Update user request by ${req.user?.id} for user ${id}`, {
+            updates: req.body
+        });
+        if (typeof id !== 'string') {
+            logger_1.logger.warn(`Invalid ID parameter: ${id}`);
+            throw new AppError_1.AppError('Invalid ID parameter', 400);
+        }
+        const updates = {};
+        if (req.body.fullName && isNonEmptyString(req.body.fullName)) {
+            updates.fullName = req.body.fullName.trim();
+        }
+        if (req.body.primaryPhone && isNonEmptyString(req.body.primaryPhone)) {
+            updates.primaryPhone = req.body.primaryPhone.trim();
+        }
+        if (req.body.secondaryPhone !== undefined) {
+            updates.secondaryPhone = isNonEmptyString(req.body.secondaryPhone)
+                ? req.body.secondaryPhone.trim()
+                : null;
+        }
+        if (req.body.physicalAddress && isNonEmptyString(req.body.physicalAddress)) {
+            updates.physicalAddress = req.body.physicalAddress.trim();
+        }
+        if (req.body.postalAddress !== undefined) {
+            updates.postalAddress = isNonEmptyString(req.body.postalAddress)
+                ? req.body.postalAddress.trim()
+                : null;
+        }
+        if (req.body.role && req.user?.role === 'ADMIN_TIER2') {
+            if (['ADMIN_TIER1', 'APPLICANT'].includes(req.body.role)) {
+                updates.role = req.body.role;
+                logger_1.logger.info(`Role update attempted by ADMIN_TIER2 ${req.user.id} for user ${id}: ${req.body.role}`);
+            }
+        }
+        const user = await prisma_1.prisma.user.update({
+            where: { id },
+            data: updates,
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                role: true,
+                updatedAt: true,
+            },
+        });
+        logger_1.logger.info(`User updated successfully: ${id}`, {
+            updatedBy: req.user?.id,
+            targetUser: id,
+            updates,
+            duration: Date.now() - startTime
+        });
+        res.json({
+            message: 'User updated successfully',
+            user
+        });
+    }
+    catch (err) {
+        if (prismaErrorCode(err) === 'P2025') {
+            logger_1.logger.warn(`Update user failed: User not found ${req.params.id}`, {
+                updatedBy: req.user?.id,
+                duration: Date.now() - startTime
+            });
+            return next(new AppError_1.AppError('User not found', 404));
+        }
+        logger_1.logger.error(`Update user failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            updatedBy: req.user?.id,
+            targetUser: req.params.id,
+            duration: Date.now() - startTime
+        });
+        next(err);
+    }
+}
+async function deleteUser(req, res, next) {
+    const startTime = Date.now();
+    try {
+        const { id } = req.params;
+        logger_1.logger.warn(`Delete user request by ${req.user?.id} for user ${id}`);
+        if (typeof id !== 'string') {
+            logger_1.logger.warn(`Invalid ID parameter: ${id}`);
+            throw new AppError_1.AppError('Invalid ID parameter', 400);
+        }
+        if (req.user?.id === id) {
+            logger_1.logger.warn(`Self-deletion attempt prevented: ${req.user.id}`);
+            throw new AppError_1.AppError('Cannot delete your own account', 400);
+        }
+        await prisma_1.prisma.user.delete({
+            where: { id },
+        });
+        logger_1.logger.warn(`User deleted: ${id}`, {
+            deletedBy: req.user?.id,
+            targetUser: id,
+            duration: Date.now() - startTime
+        });
+        res.json({
+            success: true,
+            message: 'User deleted successfully'
+        });
+    }
+    catch (err) {
+        if (prismaErrorCode(err) === 'P2025') {
+            logger_1.logger.warn(`Delete user failed: User not found ${req.params.id}`, {
+                deletedBy: req.user?.id,
+                duration: Date.now() - startTime
+            });
+            return next(new AppError_1.AppError('User not found', 404));
+        }
+        logger_1.logger.error(`Delete user failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+            error: err,
+            deletedBy: req.user?.id,
+            targetUser: req.params.id,
+            duration: Date.now() - startTime
+        });
         next(err);
     }
 }

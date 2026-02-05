@@ -47,6 +47,10 @@ app.get('/', (req, res) => {
   res.json({ message: 'VaultString SME Backend - OK' });
 });
 
+app.get('/api/_ping', (_req, res) => {
+  res.json({ ok: true });
+});
+
 app.use('/api', routes);
 
 // Error handler (must be last)

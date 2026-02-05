@@ -4,14 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "seed:admin": "npx ts-node -r dotenv/config prisma/seed-admin.ts"
+    "seed:admin": "npx ts-node -r dotenv/config prisma/seed-admin.ts",
+    "smoke:test": "ts-node -r dotenv/config src/scripts/smokeTest.ts"
   },
   "keywords": [],
   "author": "",
@@ -41,9 +43,12 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.2.0",
     "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.11",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

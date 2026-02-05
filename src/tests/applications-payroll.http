@@ -1,0 +1,112 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "AdminPass123!"
+}
+
+### Create Payroll (valid)
+POST {{baseUrl}}/api/applications/payroll
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "dateOfBirth": "1990-01-01",
+  "gender": "Male",
+  "maritalStatus": "Single",
+  "nextOfKinName": "John Doe",
+  "nextOfKinRelationship": "Brother",
+  "nextOfKinPhone": "+265999000111",
+  "loanAmount": 300000,
+  "paybackPeriodMonths": 6,
+  "employerName": "Acme Corp",
+  "employerAddress": "Main Street 123",
+  "jobTitle": "Accountant",
+  "employeeNumber": "EMP-001",
+  "dateOfEmployment": "2015-05-10",
+  "grossMonthlySalary": 800000,
+  "netMonthlySalary": 600000,
+  "payrollDeductionConfirmed": true,
+  "hasOutstandingLoans": false,
+  "outstandingLoanDetails": null,
+  "hasDefaulted": false,
+  "defaultExplanation": null
+}
+
+### Create Payroll (invalid missing employerName)
+POST {{baseUrl}}/api/applications/payroll
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "dateOfBirth": "1990-01-01",
+  "gender": "Male",
+  "maritalStatus": "Single",
+  "nextOfKinName": "John Doe",
+  "nextOfKinRelationship": "Brother",
+  "nextOfKinPhone": "+265999000111",
+  "loanAmount": 300000,
+  "paybackPeriodMonths": 6,
+  "employerAddress": "Main Street 123",
+  "jobTitle": "Accountant",
+  "employeeNumber": "EMP-001",
+  "dateOfEmployment": "2015-05-10",
+  "grossMonthlySalary": 800000,
+  "netMonthlySalary": 600000,
+  "payrollDeductionConfirmed": true,
+  "hasOutstandingLoans": false
+}
+
+### Create Payroll (wrong types)
+POST {{baseUrl}}/api/applications/payroll
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "dateOfBirth": "1990-01-01",
+  "gender": "Male",
+  "maritalStatus": "Single",
+  "nextOfKinName": "John Doe",
+  "nextOfKinRelationship": "Brother",
+  "nextOfKinPhone": "+265999000111",
+  "loanAmount": "300000",
+  "paybackPeriodMonths": "6",
+  "employerName": "Acme Corp",
+  "employerAddress": "Main Street 123",
+  "jobTitle": "Accountant",
+  "employeeNumber": "EMP-001",
+  "dateOfEmployment": "2015-05-10",
+  "grossMonthlySalary": "800000",
+  "netMonthlySalary": "600000",
+  "payrollDeductionConfirmed": "true",
+  "hasOutstandingLoans": "false"
+}
+
+### Create Payroll (unauthorized)
+POST {{baseUrl}}/api/applications/payroll
+Content-Type: application/json
+
+{
+  "dateOfBirth": "1990-01-01",
+  "gender": "Male",
+  "maritalStatus": "Single",
+  "nextOfKinName": "John Doe",
+  "nextOfKinRelationship": "Brother",
+  "nextOfKinPhone": "+265999000111",
+  "loanAmount": 300000,
+  "paybackPeriodMonths": 6,
+  "employerName": "Acme Corp",
+  "employerAddress": "Main Street 123",
+  "jobTitle": "Accountant",
+  "employeeNumber": "EMP-001",
+  "dateOfEmployment": "2015-05-10",
+  "grossMonthlySalary": 800000,
+  "netMonthlySalary": 600000,
+  "payrollDeductionConfirmed": true,
+  "hasOutstandingLoans": false
+}

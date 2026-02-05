@@ -1,0 +1,11 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+@appId = REPLACE_WITH_APP_ID
+
+### Submit (valid)
+PATCH {{baseUrl}}/api/applications/{{appId}}/submit
+Authorization: Bearer {{token}}
+
+### Submit again (should fail)
+PATCH {{baseUrl}}/api/applications/{{appId}}/submit
+Authorization: Bearer {{token}}
