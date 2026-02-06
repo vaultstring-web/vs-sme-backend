@@ -1,6 +1,7 @@
 import { Router, type Router as ExpressRouter } from 'express'
 
 import { authenticate } from '../middleware/authenticate'
+import { uploadUserDocuments } from '../config/multer'
 import { 
   requireAdmin, 
   requireAdminTier1, 
@@ -15,6 +16,8 @@ import {
   refreshToken,
   requestPasswordReset,
   confirmPasswordReset,
+  uploadUserDocumentsEndpoint,
+  getUserDocuments,
   
   // Admin endpoints
   adminRegister,
@@ -32,6 +35,18 @@ router.post('/login', login)
 router.post('/refresh-token', refreshToken)
 router.post('/password-reset/request', requestPasswordReset)
 router.post('/password-reset/confirm', confirmPasswordReset)
+router.post(
+  '/users/me/documents', 
+  authenticate, 
+  uploadUserDocuments,
+  uploadUserDocumentsEndpoint
+)
+
+router.get(
+  '/users/me/documents', 
+  authenticate, 
+  getUserDocuments
+)
 
 // ========== PROTECTED ROUTES (Require Authentication) ==========
 router.post('/logout', authenticate, logout)
@@ -47,5 +62,12 @@ router.patch('/admin/users/:id', authenticate, requireAdminTier1, updateUser)
 
 // User deletion (Admin Tier 2 only - more sensitive)
 router.delete('/admin/users/:id', authenticate, requireAdminTier2, deleteUser)
+
+router.get(
+  '/users/:id/documents', 
+  authenticate, 
+  requireAdmin,
+  getUserDocuments
+)
 
 export default router

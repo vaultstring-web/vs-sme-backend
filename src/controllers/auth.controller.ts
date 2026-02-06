@@ -3,11 +3,18 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import type { Role } from '../generated/prisma'
 import { logger } from '../config/logger'
-
 import { prisma } from '../db/prisma'
 import { AppError } from '../utils/AppError'
 import { signAccessToken, signRefreshToken } from '../services/jwt.service'
 import { generatePasswordResetToken, hashPasswordResetToken } from '../services/passwordReset.service'
+import { uploadUserDocuments } from '../config/multer'
+import fs from 'fs'
+import path from 'path'
+
+
+interface UploadedFiles {
+  [fieldname: string]: Express.Multer.File[]
+}
 
 
 function isNonEmptyString(value: unknown): value is string {
@@ -88,8 +95,49 @@ function prismaErrorCode(err: unknown): string | undefined {
 
 // ========== PUBLIC ENDPOINTS ==========
 
+
+async function processUserDocuments(
+  userId: string, 
+  files: UploadedFiles, 
+  documentTypes: Record<string, string>
+): Promise<void> {
+  const documentPromises = []
+
+  for (const [fieldName, fileArray] of Object.entries(files)) {
+    for (const file of fileArray) {
+      const documentType = documentTypes[fieldName] || fieldName
+      
+      // Generate file URL (in production, upload to cloud storage)
+      const fileUrl = `/uploads/${userId}/${file.filename}`
+      
+      documentPromises.push(
+        prisma.userDocument.create({
+          data: {
+            userId,
+            fileName: file.originalname,
+            fileUrl,
+            documentType,
+          },
+        })
+      )
+    }
+  }
+
+  await Promise.all(documentPromises)
+}
+
 export async function register(req: Request, res: Response, next: NextFunction) {
   const startTime = Date.now()
+  
+  // First, handle file upload using multer middleware
+  // We'll use a wrapper since multer is middleware
+  const uploadMiddleware = uploadUserDocuments
+  
+  // Since we can't use middleware directly in controller, 
+  // we'll create a separate endpoint for file uploads or modify the route
+  // For now, let's assume files come in as base64 or separate endpoint
+  
+  // Alternative approach: Handle files in a separate step
   try {
     const emailRaw = req.body?.email
     const password = req.body?.password
@@ -121,6 +169,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const email = normalizeEmail(emailRaw)
     const passwordHash = await bcrypt.hash(password, 12)
 
+    // Create user first
     const user = await prisma.user.create({
       data: {
         email,
@@ -133,8 +182,18 @@ export async function register(req: Request, res: Response, next: NextFunction) 
         postalAddress,
         role: 'APPLICANT',
       },
-      select: { id: true, email: true, fullName: true, role: true },
+      select: { 
+        id: true, 
+        email: true, 
+        fullName: true, 
+        role: true 
+      },
     })
+
+    // Process documents if any base64 files were provided
+    if (req.body.documents && Array.isArray(req.body.documents)) {
+      await processBase64Documents(user.id, req.body.documents)
+    }
 
     logger.info(`User registered successfully: ${user.id} - ${user.email}`, {
       userId: user.id,
@@ -143,7 +202,10 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       duration: Date.now() - startTime
     })
 
-    res.status(201).json({ profile: user })
+    res.status(201).json({ 
+      profile: user,
+      message: 'Registration successful. Please upload required documents.'
+    })
   } catch (err) {
     const duration = Date.now() - startTime
     if (prismaErrorCode(err) === 'P2002') {
@@ -157,6 +219,152 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       error: err,
       email: req.body?.email,
       duration
+    })
+    next(err)
+  }
+}
+
+async function processBase64Documents(userId: string, documents: any[]): Promise<void> {
+  const documentPromises = documents.map(async (doc: any) => {
+    if (!doc.base64 || !doc.fileName || !doc.documentType) {
+      throw new AppError('Invalid document format. Each document needs base64, fileName, and documentType.', 400)
+    }
+
+    const userDir = path.join('uploads', userId)
+    if (!fs.existsSync(userDir)) {
+      fs.mkdirSync(userDir, { recursive: true })
+    }
+
+    // Decode base64
+    const base64Data = doc.base64.replace(/^data:([A-Za-z-+/]+);base64,/, '')
+    const buffer = Buffer.from(base64Data, 'base64')
+    
+    // Determine file extension
+    const ext = doc.fileName.split('.').pop() || 'bin'
+    const uniqueFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`
+    const filePath = path.join(userDir, uniqueFileName)
+
+    // Save file
+    fs.writeFileSync(filePath, buffer)
+
+    // Create database record
+    return prisma.userDocument.create({
+      data: {
+        userId,
+        fileName: doc.fileName,
+        fileUrl: `/uploads/${userId}/${uniqueFileName}`,
+        documentType: doc.documentType,
+      },
+    })
+  })
+
+  await Promise.all(documentPromises)
+}
+
+// Add this new endpoint for document upload after registration
+export async function uploadUserDocumentsEndpoint(req: Request, res: Response, next: NextFunction) {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401)
+    }
+
+    const files = req.files as UploadedFiles
+    
+    if (!files || Object.keys(files).length === 0) {
+      throw new AppError('No files uploaded', 400)
+    }
+
+    // Define document type mapping
+    const documentTypes: Record<string, string> = {
+      nationalIdFront: 'NATIONAL_ID_FRONT',
+      nationalIdBack: 'NATIONAL_ID_BACK',
+      profilePicture: 'PROFILE_PICTURE',
+      proofOfAddress: 'PROOF_OF_ADDRESS',
+      additionalDocuments: 'ADDITIONAL_DOCUMENT',
+    }
+
+    await processUserDocuments(req.user.id, files, documentTypes)
+
+    logger.info(`User documents uploaded successfully for user: ${req.user.id}`, {
+      userId: req.user.id,
+      fileCount: Object.values(files).flat().length,
+      duration: Date.now() - startTime
+    })
+
+    res.json({
+      success: true,
+      message: 'Documents uploaded successfully',
+      uploadedFiles: Object.keys(files)
+    })
+  } catch (err) {
+    logger.error(`Document upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+      error: err,
+      userId: req.user?.id,
+      duration: Date.now() - startTime
+    })
+    next(err)
+  }
+}
+
+// Add this endpoint to get user documents
+export async function getUserDocuments(req: Request, res: Response, next: NextFunction) {
+  const startTime = Date.now()
+  
+  try {
+    // Get userId from params or authenticated user
+    let userId: string | undefined
+    
+    if (req.params.id) {
+      // Handle case where id might be string or array
+      if (Array.isArray(req.params.id)) {
+        userId = req.params.id[0] // Take first element if it's an array
+      } else {
+        userId = req.params.id as string
+      }
+    } else {
+      userId = req.user?.id
+    }
+    
+    if (!userId) {
+      throw new AppError('User ID required', 400)
+    }
+
+    // Validate userId is a valid UUID format (optional but good practice)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId)) {
+      throw new AppError('Invalid user ID format', 400)
+    }
+
+    const documents = await prisma.userDocument.findMany({
+      where: { 
+        userId: userId // TypeScript now knows this is a string
+      },
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        documentType: true,
+        uploadedAt: true,
+        isVerified: true,
+        verifiedAt: true,
+      },
+      orderBy: { uploadedAt: 'desc' }
+    })
+
+    logger.info(`Retrieved documents for user: ${userId}`, {
+      userId,
+      documentCount: documents.length,
+      duration: Date.now() - startTime
+    })
+
+    res.json({ documents })
+  } catch (err) {
+    logger.error(`Get user documents failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+      error: err,
+      userId: req.params.id || req.user?.id,
+      duration: Date.now() - startTime
     })
     next(err)
   }
@@ -205,13 +413,6 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id)
 
-    await prisma.denylistedToken.create({
-      data: {
-        userId: user.id,
-        jti: refreshJti,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    })
 
     logger.info(`User logged in successfully: ${user.id} - ${user.email}`, {
       userId: user.id,
@@ -310,8 +511,31 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
       throw new AppError('Unauthorized', 401)
     }
 
-    const expiresAt = getJwtExpiresAt(req.user.token)
+    // Revoke refresh token if provided
+    const refreshToken = req.body?.refreshToken
+    if (refreshToken && isNonEmptyString(refreshToken)) {
+      try {
+        const { verifyRefreshToken } = await import('../services/jwt.service')
+        const payload = verifyRefreshToken(refreshToken)
+        
+        // Add refresh token to denylist
+        await prisma.denylistedToken.create({
+          data: {
+            jti: payload.jti,
+            userId: req.user.id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        })
+        
+        logger.info(`Refresh token revoked during logout: ${payload.jti}`)
+      } catch (err) {
+        // If refresh token is invalid, just log and continue
+        logger.warn('Invalid refresh token provided during logout, continuing with access token revocation')
+      }
+    }
 
+    // Revoke access token
+    const expiresAt = getJwtExpiresAt(req.user.token)
     await prisma.denylistedToken.upsert({
       where: { jti: req.user.jti },
       create: { jti: req.user.jti, userId: req.user.id, expiresAt },

@@ -107,9 +107,27 @@ src/
 ├── app.ts           # Express app factory
 └── server.ts        # Server entry point
 
-Testing (Coming Soon)
+Testing
+The project includes automated unit and integration tests powered by Vitest and Supertest.
 
-Unit and integration tests will be added in Stage 9. For now, manual testing via Postman or curl is recommended.
+To run the full test suite once:
+pnpm run test
+or
+npm run test
+
+To run tests in watch mode (re-runs on file changes):
+pnpm run test:watch
+or
+npm run test:watch
+
+A smoke test script is also available to verify basic API connectivity and auth flow:
+pnpm run smoke:test
+or
+npm run smoke:test
+
+All tests assume a clean test database. For local development, tests run against the same database defined in your .env file. In CI environments, a separate test DB URL should be configured.
+
+Make sure your database is up and seeded (if needed) before running tests.
 
 API Documentation
 

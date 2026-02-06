@@ -5,24 +5,11 @@ import { successLogger, errorLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
 import routes from './routes';
 
-// Import rate limiting if needed
+// Import rate limiting
 import rateLimit from 'express-rate-limit';
+import { env } from './config/env'; // ← Import env config
 
 const app: Express = express();
-
-// Create rate limiters inline (no wildcard paths)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many attempts, please try again after 15 minutes',
-  standardHeaders: true,
-});
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-});
 
 // Logging
 app.use(successLogger);
@@ -35,12 +22,30 @@ setupSecurityMiddleware(app);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting - no wildcards
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
-app.use('/api/auth/password-reset/request', authLimiter);
-app.use('/api/auth/password-reset/confirm', authLimiter);
-app.use('/api', apiLimiter);
+// ➕ Only apply rate limiting in non-test environments
+if (env.NODE_ENV !== 'test') {
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'Too many attempts, please try again after 15 minutes',
+    standardHeaders: true,
+  });
+
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+  });
+
+  // Auth endpoints
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
+  app.use('/api/auth/password-reset/request', authLimiter);
+  app.use('/api/auth/password-reset/confirm', authLimiter);
+
+  // General API
+  app.use('/api', apiLimiter);
+}
 
 // Routes
 app.get('/', (req, res) => {

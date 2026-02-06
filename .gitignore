@@ -1,8 +1,21 @@
 node_modules
 # Keep environment variables out of version control
-.env
+.env*
 
 /src/generated/prisma
 
 node_modules
 
+# Test coverage
+coverage/
+*.lcov
+
+# Test artifacts
+src/tests/test-data/
+test-results/
+
+# Vitest cache
+.vitest/
+.vscode/
+
+uploads

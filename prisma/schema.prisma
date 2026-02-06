@@ -13,6 +13,22 @@ datasource db {
   provider = "postgresql"
 }
 
+model UserDocument {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  fileName      String
+  fileUrl       String    // e.g., Google Drive shareable link or local path
+  documentType  String    // e.g., "national_id_front", "national_id_back", "profile_picture", "proof_of_address"
+  uploadedAt    DateTime  @default(now())
+  isVerified    Boolean   @default(false)
+  verifiedBy    String?
+  verifiedAt    DateTime?
+
+  @@index([userId])
+  @@index([documentType])
+}
+
 
 model User {
   id                   String           @id @default(uuid())
@@ -24,6 +40,7 @@ model User {
   secondaryPhone       String?
   physicalAddress      String
   postalAddress        String?
+  documents            UserDocument[]
   role                 Role             @default(APPLICANT)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
