@@ -19,3 +19,9 @@ test-results/
 .vscode/
 
 uploads
+uploads
+
+.trae
+.husky
+dist/
+

@@ -13,7 +13,7 @@ const levels = {
     debug: 4,
 };
 const level = () => {
-    return process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+    return process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info');
 };
 const colors = {
     error: 'red',
@@ -23,7 +23,9 @@ const colors = {
     debug: 'white',
 };
 winston_1.default.addColors(colors);
-const format = winston_1.default.format.combine(winston_1.default.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }), winston_1.default.format.colorize({ all: true }), winston_1.default.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`));
+const format = (process.env.LOG_FORMAT || 'pretty') === 'json'
+    ? winston_1.default.format.combine(winston_1.default.format.timestamp(), winston_1.default.format.json())
+    : winston_1.default.format.combine(winston_1.default.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }), winston_1.default.format.colorize({ all: true }), winston_1.default.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`));
 const transports = [
     new winston_1.default.transports.Console(),
     // Optionally add File transport for production

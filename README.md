@@ -80,6 +80,30 @@ Local Setup
    curl http://localhost:3000
    Returns: { "message": "VaultString SME Backend - OK" }
 
+Document Uploads
+- Endpoint (metadata only): POST /api/applications/:id/documents
+  - JSON body: { fileName, fileUrl, documentType }
+- Endpoint (file upload): POST /api/applications/:id/documents/upload
+  - multipart/form-data with fields:
+    - file (single)
+    - documentType
+  - Returns fileUrl like /uploads/applications/:id/:filename
+- Static serving: Files are available under /uploads
+- Limits and types:
+  - MAX_UPLOAD_SIZE_BYTES (default 5MB)
+  - ALLOWED_UPLOAD_TYPES (default application/pdf,image/png,image/jpeg)
+  - MAX_DOCUMENTS_PER_APPLICATION (default 20)
+  - DOCUMENT_TYPE_ALLOWED mapping, e.g.:
+    business_proof=application/pdf,image/png,image/jpeg;bank_statement=application/pdf
+
+Logging
+- Config via env:
+  - LOG_LEVEL=debug|info|warn|error
+  - LOG_FORMAT=pretty|json
+  - LOG_REQUEST_BODY=on|off (sanitized)
+- Request logs include: correlation ID, user id, method, url, status, duration, content length
+- Error logs include: correlation ID, user id, method, url, status, message, stack (in development)
+
 Available Scripts
 
 The project uses pnpm by default, but these commands also work with npm or yarn:

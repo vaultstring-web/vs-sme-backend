@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const authenticate_1 = require("../middleware/authenticate");
+const multer_1 = require("../config/multer");
 const authorize_1 = require("../middleware/authorize");
 const auth_controller_1 = require("../controllers/auth.controller");
 const router = (0, express_1.Router)();
@@ -11,6 +12,8 @@ router.post('/login', auth_controller_1.login);
 router.post('/refresh-token', auth_controller_1.refreshToken);
 router.post('/password-reset/request', auth_controller_1.requestPasswordReset);
 router.post('/password-reset/confirm', auth_controller_1.confirmPasswordReset);
+router.post('/users/me/documents', authenticate_1.authenticate, multer_1.uploadUserDocuments, auth_controller_1.uploadUserDocumentsEndpoint);
+router.get('/users/me/documents', authenticate_1.authenticate, auth_controller_1.getUserDocuments);
 // ========== PROTECTED ROUTES (Require Authentication) ==========
 router.post('/logout', authenticate_1.authenticate, auth_controller_1.logout);
 // ========== ADMIN ROUTES ==========
@@ -22,5 +25,6 @@ router.get('/admin/users/:id', authenticate_1.authenticate, authorize_1.requireA
 router.patch('/admin/users/:id', authenticate_1.authenticate, authorize_1.requireAdminTier1, auth_controller_1.updateUser);
 // User deletion (Admin Tier 2 only - more sensitive)
 router.delete('/admin/users/:id', authenticate_1.authenticate, authorize_1.requireAdminTier2, auth_controller_1.deleteUser);
+router.get('/users/:id/documents', authenticate_1.authenticate, authorize_1.requireAdmin, auth_controller_1.getUserDocuments);
 exports.default = router;
 //# sourceMappingURL=auth.routes.js.map

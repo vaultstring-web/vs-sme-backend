@@ -3,14 +3,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateSmePayload = validateSmePayload;
 exports.validatePayrollPayload = validatePayrollPayload;
 exports.validateDocumentPayload = validateDocumentPayload;
+exports.validateDocumentTypeBody = validateDocumentTypeBody;
 exports.validateDraftPayload = validateDraftPayload;
 exports.createSmeApplication = createSmeApplication;
 exports.createPayrollApplication = createPayrollApplication;
 exports.saveDraftApplication = saveDraftApplication;
 exports.uploadDocument = uploadDocument;
+exports.uploadDocumentFile = uploadDocumentFile;
 exports.submitApplication = submitApplication;
 const prisma_1 = require("../db/prisma");
 const AppError_1 = require("../utils/AppError");
+const logger_1 = require("../config/logger");
 function isNonEmptyString(v) {
     return typeof v === 'string' && v.trim().length > 0;
 }
@@ -112,6 +115,12 @@ function validateDocumentPayload(req, _res, next) {
         return next(new AppError_1.AppError('documentType is required', 400));
     next();
 }
+function validateDocumentTypeBody(req, _res, next) {
+    const b = req.body ?? {};
+    if (!isNonEmptyString(b.documentType))
+        return next(new AppError_1.AppError('documentType is required', 400));
+    next();
+}
 function validateDraftPayload(req, _res, next) {
     next();
 }
@@ -153,6 +162,7 @@ async function createSmeApplication(req, res, next) {
             });
             return created;
         });
+        logger_1.logger.info(`application created ${app.id} SME by ${userId}`);
         res.status(201).json({ success: true, data: app });
     }
     catch (err) {
@@ -196,6 +206,7 @@ async function createPayrollApplication(req, res, next) {
             });
             return created;
         });
+        logger_1.logger.info(`application created ${app.id} PAYROLL by ${userId}`);
         res.status(201).json({ success: true, data: app });
     }
     catch (err) {
@@ -267,6 +278,8 @@ async function saveDraftApplication(req, res, next) {
                 },
             });
         }
+        const keys = Object.keys(req.body || {});
+        logger_1.logger.info(`application draft saved ${app.id} by ${userId} keys=${keys.join(',')}`);
         res.json({ success: true });
     }
     catch (err) {
@@ -294,6 +307,54 @@ async function uploadDocument(req, res, next) {
             },
             select: { id: true, fileName: true, fileUrl: true, documentType: true, uploadedAt: true },
         });
+        logger_1.logger.info(`document metadata added ${doc.id} app=${id} by ${userId} type=${req.body.documentType}`);
+        res.status(201).json({ success: true, data: doc });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function uploadDocumentFile(req, res, next) {
+    try {
+        if (!req.user)
+            throw new AppError_1.AppError('Unauthorized', 401);
+        const userId = req.user.id;
+        const id = String(req.params.id);
+        if (!isNonEmptyString(id))
+            throw new AppError_1.AppError('Invalid id', 400);
+        const app = await prisma_1.prisma.application.findUnique({ where: { id }, select: { id: true, userId: true } });
+        if (!app)
+            throw new AppError_1.AppError('Not found', 404);
+        ensureOwner(app, userId);
+        if (!req.file)
+            throw new AppError_1.AppError('Invalid file type', 400);
+        const maxDocs = Number(process.env.MAX_DOCUMENTS_PER_APPLICATION ?? 20);
+        const count = await prisma_1.prisma.document.count({ where: { applicationId: id } });
+        if (count >= maxDocs)
+            throw new AppError_1.AppError('Document limit reached', 400);
+        const typeMapStr = process.env.DOCUMENT_TYPE_ALLOWED ?? '';
+        const map = {};
+        for (const pair of typeMapStr.split(';')) {
+            const [k, v] = pair.split('=');
+            if (k && v)
+                map[k.trim()] = v.split(',').map(s => s.trim());
+        }
+        const dt = String(req.body.documentType || '');
+        if (!isNonEmptyString(dt))
+            throw new AppError_1.AppError('documentType is required', 400);
+        if (map[dt] && !map[dt].includes(req.file.mimetype))
+            throw new AppError_1.AppError('Invalid file type for documentType', 400);
+        const fileUrl = `/uploads/applications/${id}/${req.file.filename}`;
+        const doc = await prisma_1.prisma.document.create({
+            data: {
+                applicationId: id,
+                fileName: req.file.originalname,
+                fileUrl,
+                documentType: dt,
+            },
+            select: { id: true, fileName: true, fileUrl: true, documentType: true, uploadedAt: true },
+        });
+        logger_1.logger.info(`document uploaded ${doc.id} app=${id} by ${userId} name=${req.file.originalname} type=${req.file.mimetype}`);
         res.status(201).json({ success: true, data: doc });
     }
     catch (err) {
@@ -319,6 +380,7 @@ async function submitApplication(req, res, next) {
             prisma_1.prisma.application.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: now } }),
             prisma_1.prisma.auditLog.create({ data: { applicationId: id, actorId: userId, action: 'SUBMITTED' } }),
         ]);
+        logger_1.logger.info(`application submitted ${id} by ${userId}`);
         res.json({ success: true });
     }
     catch (err) {
