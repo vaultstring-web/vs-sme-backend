@@ -354,4 +354,43 @@ describe('Applications endpoints', () => {
       .set('Authorization', `Bearer ${otherToken}`)
     expect(res.status).toBe(403)
   })
+
+  it('upload document file (valid pdf)', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .post(`/api/applications/${appId}/documents/upload`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('%PDF-1.4\n%âãÏÓ\n'), { filename: 'test.pdf', contentType: 'application/pdf' })
+      .field('documentType', 'business_proof')
+    expect(res.status).toBe(201)
+    expect(typeof res.body.data.fileUrl).toBe('string')
+  })
+
+  it('upload document file (invalid type)', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .post(`/api/applications/${appId}/documents/upload`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('MZ'), { filename: 'bad.exe', contentType: 'application/octet-stream' })
+      .field('documentType', 'business_proof')
+    expect(res.status).toBe(400)
+  })
+
+  it('upload document file (limit reached)', async () => {
+    process.env.MAX_DOCUMENTS_PER_APPLICATION = '3'
+    const agent = createAgent()
+    const ok = await agent
+      .post(`/api/applications/${appId}/documents/upload`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('%PDF-1.4\n'), { filename: 'another.pdf', contentType: 'application/pdf' })
+      .field('documentType', 'business_proof')
+    expect(ok.status).toBe(201)
+    const fail = await agent
+      .post(`/api/applications/${appId}/documents/upload`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('%PDF-1.4\n'), { filename: 'third.pdf', contentType: 'application/pdf' })
+      .field('documentType', 'business_proof')
+    expect(fail.status).toBe(400)
+    process.env.MAX_DOCUMENTS_PER_APPLICATION = undefined
+  })
 })

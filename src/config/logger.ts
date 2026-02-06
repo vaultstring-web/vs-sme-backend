@@ -9,7 +9,7 @@ const levels = {
 };
 
 const level = () => {
-  return process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+  return process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info');
 };
 
 const colors = {
@@ -22,13 +22,14 @@ const colors = {
 
 winston.addColors(colors);
 
-const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.colorize({ all: true }),
-  winston.format.printf(
-    (info) => `${info.timestamp} ${info.level}: ${info.message}`
-  )
-);
+const format =
+  (process.env.LOG_FORMAT || 'pretty') === 'json'
+    ? winston.format.combine(winston.format.timestamp(), winston.format.json())
+    : winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+        winston.format.colorize({ all: true }),
+        winston.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`)
+      );
 
 const transports = [
   new winston.transports.Console(),

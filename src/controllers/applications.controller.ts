@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { prisma } from '../db/prisma'
 import { AppError } from '../utils/AppError'
+import { logger } from '../config/logger'
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
@@ -69,6 +70,12 @@ export function validateDocumentPayload(req: Request, _res: Response, next: Next
   next()
 }
 
+export function validateDocumentTypeBody(req: Request, _res: Response, next: NextFunction) {
+  const b = req.body ?? {}
+  if (!isNonEmptyString(b.documentType)) return next(new AppError('documentType is required', 400))
+  next()
+}
+
 export function validateDraftPayload(req: Request, _res: Response, next: NextFunction) {
   next()
 }
@@ -110,6 +117,7 @@ export async function createSmeApplication(req: Request, res: Response, next: Ne
       })
       return created
     })
+    logger.info(`application created ${app.id} SME by ${userId}`)
     res.status(201).json({ success: true, data: app })
   } catch (err) {
     next(err)
@@ -152,6 +160,7 @@ export async function createPayrollApplication(req: Request, res: Response, next
       })
       return created
     })
+    logger.info(`application created ${app.id} PAYROLL by ${userId}`)
     res.status(201).json({ success: true, data: app })
   } catch (err) {
     next(err)
@@ -218,6 +227,8 @@ export async function saveDraftApplication(req: Request, res: Response, next: Ne
         },
       })
     }
+    const keys = Object.keys(req.body || {})
+    logger.info(`application draft saved ${app.id} by ${userId} keys=${keys.join(',')}`)
     res.json({ success: true })
   } catch (err) {
     next(err)
@@ -242,6 +253,46 @@ export async function uploadDocument(req: Request, res: Response, next: NextFunc
       },
       select: { id: true, fileName: true, fileUrl: true, documentType: true, uploadedAt: true },
     })
+    logger.info(`document metadata added ${doc.id} app=${id} by ${userId} type=${req.body.documentType}`)
+    res.status(201).json({ success: true, data: doc })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function uploadDocumentFile(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new AppError('Unauthorized', 401)
+    const userId = req.user.id
+    const id = String(req.params.id)
+    if (!isNonEmptyString(id)) throw new AppError('Invalid id', 400)
+    const app = await prisma.application.findUnique({ where: { id }, select: { id: true, userId: true } })
+    if (!app) throw new AppError('Not found', 404)
+    ensureOwner(app, userId)
+    if (!req.file) throw new AppError('Invalid file type', 400)
+    const maxDocs = Number(process.env.MAX_DOCUMENTS_PER_APPLICATION ?? 20)
+    const count = await prisma.document.count({ where: { applicationId: id } })
+    if (count >= maxDocs) throw new AppError('Document limit reached', 400)
+    const typeMapStr = process.env.DOCUMENT_TYPE_ALLOWED ?? ''
+    const map: Record<string, string[]> = {}
+    for (const pair of typeMapStr.split(';')) {
+      const [k, v] = pair.split('=')
+      if (k && v) map[k.trim()] = v.split(',').map(s => s.trim())
+    }
+    const dt = String(req.body.documentType || '')
+    if (!isNonEmptyString(dt)) throw new AppError('documentType is required', 400)
+    if (map[dt] && !map[dt].includes(req.file.mimetype)) throw new AppError('Invalid file type for documentType', 400)
+    const fileUrl = `/uploads/applications/${id}/${req.file.filename}`
+    const doc = await prisma.document.create({
+      data: {
+        applicationId: id,
+        fileName: req.file.originalname,
+        fileUrl,
+        documentType: dt,
+      },
+      select: { id: true, fileName: true, fileUrl: true, documentType: true, uploadedAt: true },
+    })
+    logger.info(`document uploaded ${doc.id} app=${id} by ${userId} name=${req.file.originalname} type=${req.file.mimetype}`)
     res.status(201).json({ success: true, data: doc })
   } catch (err) {
     next(err)
@@ -263,6 +314,7 @@ export async function submitApplication(req: Request, res: Response, next: NextF
       prisma.application.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: now } }),
       prisma.auditLog.create({ data: { applicationId: id, actorId: userId, action: 'SUBMITTED' } }),
     ])
+    logger.info(`application submitted ${id} by ${userId}`)
     res.json({ success: true })
   } catch (err) {
     next(err)

@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:3000
+@token = REPLACE_WITH_TOKEN
+@appId = REPLACE_WITH_APP_ID
+
+### Upload Document (valid)
+POST {{baseUrl}}/api/applications/{{appId}}/documents/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="documentType"
+
+business_proof
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Upload Document (invalid type)
+POST {{baseUrl}}/api/applications/{{appId}}/documents/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="documentType"
+
+business_proof
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="bad.exe"
+Content-Type: application/octet-stream
+
+< ./bad.exe
+--WebKitFormBoundary7MA4YWxkTrZu0gW--

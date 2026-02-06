@@ -4,6 +4,8 @@ import { setupSecurityMiddleware } from './middleware/security';
 import { successLogger, errorLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
 import routes from './routes';
+import path from 'path';
+import { correlationId } from './middleware/correlationId';
 
 // Import rate limiting if needed
 import rateLimit from 'express-rate-limit';
@@ -32,8 +34,12 @@ app.use(errorLogger);
 setupSecurityMiddleware(app);
 
 // Body parsing
+app.use(correlationId);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Static uploads
+app.use('/uploads', express.static(path.resolve('uploads')));
 
 // Rate limiting - no wildcards
 app.use('/api/auth/login', authLimiter);

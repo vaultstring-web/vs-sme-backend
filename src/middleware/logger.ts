@@ -6,10 +6,14 @@ import { logger } from '../config/logger';
 morgan.token('message', (req: Request, res: Response) => {
   return (res.locals as any).errorMessage || '';
 });
+morgan.token('correlationId', (req: Request) => (req as any).id || '');
+morgan.token('userId', (req: Request) => (req as any).user?.id || '');
+morgan.token('resLength', (_req: Request, res: Response) => (res.getHeader('content-length') as string) || '');
 
 const getIpFormat = () => (process.env.NODE_ENV === 'production' ? ':remote-addr - ' : '');
-const successResponseFormat = `${getIpFormat()}:method :url :status - :response-time ms`;
-const errorResponseFormat = `${getIpFormat()}:method :url :status - :response-time ms - message: :message`;
+const base = `${getIpFormat()}[id=:correlationId] [user=:userId] :method :url :status - :response-time ms - len=:resLength`;
+const successResponseFormat = base;
+const errorResponseFormat = `${base} - message: :message`;
 
 export const successLogger = morgan(successResponseFormat, {
   skip: (req, res) => res.statusCode >= 400,
