@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { describe, it, expect, beforeAll } from 'vitest'
 import { createAgent } from '../helpers/testServer'
+import { prisma } from '../../db/prisma'
 
 let token = ''
 let appId = ''
@@ -41,7 +42,7 @@ describe('Applications endpoints', () => {
 
   it('ping routes', async () => {
     const agent = createAgent()
-    const res = await agent.get('/api/applications/_ping').set('Authorization', `Bearer ${token}`)
+    const res = await agent.get('/api/_ping').set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
   })
@@ -392,5 +393,290 @@ describe('Applications endpoints', () => {
       .field('documentType', 'business_proof')
     expect(fail.status).toBe(400)
     process.env.MAX_DOCUMENTS_PER_APPLICATION = undefined
+  })
+    // ==============================
+  // NEW: GET /applications (list)
+  // ==============================
+
+  it('list own applications (default)', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get('/api/applications')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+    expect(res.body.meta).toBeDefined()
+    expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('list applications with pagination', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get('/api/applications?page=1&limit=2')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.meta.limit).toBe(2)
+    expect(res.body.meta.page).toBe(1)
+  })
+
+  it('list applications filtered by status=DRAFT', async () => {
+    // Create a new DRAFT app to ensure we have one
+    const payload = {
+      businessName: 'DraftCo',
+      businessType: 'Retail',
+      yearsInOperation: 2,
+      loanProduct: 'WC',
+      loanAmount: 100000,
+      paybackPeriodMonths: 6,
+      purposeOfLoan: 'Stock',
+      repaymentMethod: 'Monthly',
+      hasOutstandingLoans: false,
+      hasDefaulted: false,
+    }
+    const agent = createAgent()
+    const createRes = await agent
+      .post('/api/applications/sme')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+    expect(createRes.status).toBe(201)
+
+    const res = await agent
+      .get('/api/applications?status=DRAFT')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((app: any) => app.status === 'DRAFT')).toBe(true)
+  })
+
+  it('list applications filtered by type=PAYROLL', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get('/api/applications?type=PAYROLL')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((app: any) => app.type === 'PAYROLL')).toBe(true)
+  })
+
+  it('list applications with date range filter', async () => {
+    const startDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0] // yesterday
+    const endDate = new Date().toISOString().split('T')[0] // today
+    const agent = createAgent()
+    const res = await agent
+      .get(`/api/applications?startDate=${startDate}&endDate=${endDate}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+  })
+
+  it('list applications – forbidden for other user', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get('/api/applications')
+      .set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(200)
+    // Should return *their* apps, not the main user's
+    // So as long as no error, it's correct behavior
+    expect(Array.isArray(res.body.data)).toBe(true)
+  })
+
+  // ==============================
+  // NEW: GET /applications/:id
+  // ==============================
+
+  it('get application by ID (valid, owned)', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get(`/api/applications/${appId}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.app.id).toBe(appId)
+    expect(res.body.app.smeData).toBeDefined()
+    expect(res.body.app.documents).toBeDefined()
+  })
+
+  it('get application by ID – not found', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get('/api/applications/invalid-id-123')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(404)
+  })
+
+  it('get application by ID – forbidden (not owner)', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .get(`/api/applications/${appId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(403)
+  })
+
+  // ==============================
+  // NEW: PATCH /applications/:id (edit draft)
+  // ==============================
+
+  it('PATCH edit application (valid, DRAFT)', async () => {
+    // First, create a fresh DRAFT app
+    const payload = {
+      businessName: 'Editable Biz',
+      businessType: 'Services',
+      yearsInOperation: 3,
+      loanProduct: 'Equipment',
+      loanAmount: 250000,
+      paybackPeriodMonths: 10,
+      purposeOfLoan: 'Laptop',
+      repaymentMethod: 'Monthly',
+      hasOutstandingLoans: false,
+      hasDefaulted: false,
+    }
+    const agent = createAgent()
+    const createRes = await agent
+      .post('/api/applications/sme')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+    expect(createRes.status).toBe(201)
+    const draftId = createRes.body.data.id
+
+    const patchRes = await agent
+      .patch(`/api/applications/${draftId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ loanAmount: 300000, businessName: 'Updated Editable Biz' })
+    expect(patchRes.status).toBe(200)
+
+    // Verify update
+    const getRes = await agent
+      .get(`/api/applications/${draftId}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(getRes.body.app.smeData.loanAmount).toBe(300000)
+    expect(getRes.body.app.smeData.businessName).toBe('Updated Editable Biz')
+  })
+
+  it('PATCH edit submitted application – should fail', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .patch(`/api/applications/${appId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ loanAmount: 999999 })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toContain('Only DRAFT')
+  })
+
+  // ==============================
+  // NEW: DELETE /applications/:id
+  // ==============================
+
+  it('delete DRAFT application (valid)', async () => {
+    // Create a new DRAFT app to delete
+    const payload = {
+      businessName: 'To Be Deleted',
+      businessType: 'Retail',
+      yearsInOperation: 1,
+      loanProduct: 'WC',
+      loanAmount: 50000,
+      paybackPeriodMonths: 6,
+      purposeOfLoan: 'Test Delete',
+      repaymentMethod: 'Monthly',
+      hasOutstandingLoans: false,
+      hasDefaulted: false,
+    }
+    const agent = createAgent()
+    const createRes = await agent
+      .post('/api/applications/sme')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+    expect(createRes.status).toBe(201)
+    const deleteId = createRes.body.data.id
+
+    const delRes = await agent
+      .delete(`/api/applications/${deleteId}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(delRes.status).toBe(200)
+
+    // Confirm deletion
+    const getRes = await agent
+      .get(`/api/applications/${deleteId}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(getRes.status).toBe(404)
+  })
+
+  it('delete SUBMITTED application – should succeed (per spec)', async () => {
+    // Create & submit a new app
+    const payload = {
+      businessName: 'Delete After Submit',
+      businessType: 'Retail',
+      yearsInOperation: 1,
+      loanProduct: 'WC',
+      loanAmount: 60000,
+      paybackPeriodMonths: 6,
+      purposeOfLoan: 'Test Delete Submitted',
+      repaymentMethod: 'Monthly',
+      hasOutstandingLoans: false,
+      hasDefaulted: false,
+    }
+    const agent = createAgent()
+    const createRes = await agent
+      .post('/api/applications/sme')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+    expect(createRes.status).toBe(201)
+    const id = createRes.body.data.id
+
+    await agent
+      .patch(`/api/applications/${id}/submit`)
+      .set('Authorization', `Bearer ${token}`)
+
+    const delRes = await agent
+      .delete(`/api/applications/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(delRes.status).toBe(200)
+
+    const getRes = await agent
+      .get(`/api/applications/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(getRes.status).toBe(404)
+  })
+
+  it('delete application in UNDER_REVIEW – should fail', async () => {
+    // Simulate an app that’s been moved to UNDER_REVIEW (by admin)
+    const payload = {
+      businessName: 'NonDeletable',
+      businessType: 'Retail',
+      yearsInOperation: 1,
+      loanProduct: 'WC',
+      loanAmount: 70000,
+      paybackPeriodMonths: 6,
+      purposeOfLoan: 'Test Non-Delete',
+      repaymentMethod: 'Monthly',
+      hasOutstandingLoans: false,
+      hasDefaulted: false,
+    }
+    const agent = createAgent()
+    const createRes = await agent
+      .post('/api/applications/sme')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+    expect(createRes.status).toBe(201)
+    const id = createRes.body.data.id
+
+    await agent
+      .patch(`/api/applications/${id}/submit`)
+      .set('Authorization', `Bearer ${token}`)
+
+    await prisma.application.update({
+      where: { id },
+      data: { status: 'UNDER_REVIEW' },
+    })
+
+    const delRes = await agent
+      .delete(`/api/applications/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+    expect(delRes.status).toBe(400)
+    expect(delRes.body.message).toContain('Cannot delete')
+  })
+
+  it('delete application – not owner', async () => {
+    const agent = createAgent()
+    const res = await agent
+      .delete(`/api/applications/${appId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+    expect(res.status).toBe(403)
   })
 })

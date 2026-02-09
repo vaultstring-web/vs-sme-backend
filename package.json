@@ -7,6 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:auth": "vitest run src/tests/integration/auth.test.ts",
+    "test:app": "vitest run src/tests/integration/applications.test.ts",
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",

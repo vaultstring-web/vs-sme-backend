@@ -84,6 +84,42 @@ function ensureOwner(app: { userId: string }, userId: string) {
   if (app.userId !== userId) throw new AppError('Forbidden', 403)
 }
 
+function parsePagination(query: any): { skip: number; take: number } {
+  const page = Math.max(1, parseInt(query.page as string, 10) || 1)
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit as string, 10) || 10))
+  return {
+    skip: (page - 1) * limit,
+    take: limit,
+  }
+}
+
+function parseFilters(query: any) {
+  const filters: any = {}
+
+  // Status filter
+  if (query.status && ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'REPAYED', 'DEFAULTED'].includes(query.status)) {
+    filters.status = query.status
+  }
+
+  // Type filter
+  if (query.type && ['SME', 'PAYROLL'].includes(query.type)) {
+    filters.type = query.type
+  }
+
+  // Date range: submittedAt or createdAt
+  const startDate = query.startDate ? new Date(query.startDate) : null
+  const endDate = query.endDate ? new Date(query.endDate) : null
+
+  if (startDate || endDate) {
+    filters.createdAt = {}
+    if (startDate) filters.createdAt.gte = startDate
+    if (endDate) filters.createdAt.lte = endDate
+  }
+
+  return filters
+}
+
+
 export async function createSmeApplication(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) throw new AppError('Unauthorized', 401)
@@ -316,6 +352,144 @@ export async function submitApplication(req: Request, res: Response, next: NextF
     ])
     logger.info(`application submitted ${id} by ${userId}`)
     res.json({ success: true })
+  } catch (err) {
+    next(err)
+  }
+}
+
+
+export async function listApplications(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new AppError('Unauthorized', 401)
+    const userId = req.user.id
+
+    const { skip, take } = parsePagination(req.query)
+    const filters = parseFilters(req.query)
+
+    const where = {
+      userId,
+      ...filters,
+    }
+
+    const [applications, total] = await Promise.all([
+      prisma.application.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          submittedAt: true,
+          smeData: {
+            select: {
+              businessName: true,
+              loanAmount: true,
+              loanProduct: true,
+            },
+          },
+          payrollData: {
+            select: {
+              employerName: true,
+              loanAmount: true,
+              jobTitle: true,
+            },
+          },
+        },
+      }),
+      prisma.application.count({ where }),
+    ])
+
+    const page = skip / take + 1
+    const totalPages = Math.ceil(total / take)
+
+    res.json({
+      success: true,
+      data: applications,
+      meta: {
+        total,
+        page,
+        totalPages,
+        limit: take,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function getApplicationById(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new AppError('Unauthorized', 401)
+    const userId = req.user.id
+    const id = String(req.params.id)
+    if (!isNonEmptyString(id)) throw new AppError('Invalid id', 400)
+
+    const app = await prisma.application.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        createdAt: true,
+        submittedAt: true,
+        userId: true,
+        smeData: true,
+        payrollData: true,
+        documents: {
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            documentType: true,
+            uploadedAt: true,
+          },
+        },
+      },
+    })
+
+    if (!app) throw new AppError('Application not found', 404)
+    if (app.userId !== userId) throw new AppError('Forbidden', 403)
+
+    res.json({ success: true, app: app })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function deleteApplication(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new AppError('Unauthorized', 401)
+    const userId = req.user.id
+    const id = String(req.params.id)
+    if (!isNonEmptyString(id)) throw new AppError('Invalid id', 400)
+
+    const app = await prisma.application.findUnique({
+      where: { id },
+      select: { userId: true, status: true },
+    })
+
+    if (!app) throw new AppError('Not found', 404)
+    if (app.userId !== userId) throw new AppError('Forbidden', 403)
+
+    // Only allow deletion if in DRAFT or SUBMITTED (not beyond review)
+    if (!['DRAFT', 'SUBMITTED'].includes(app.status)) {
+      throw new AppError('Cannot delete application in current status', 400)
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Delete related data
+      await tx.document.deleteMany({ where: { applicationId: id } })
+      await tx.smeApplicationData.deleteMany({ where: { applicationId: id } })
+      await tx.payrollApplicationData.deleteMany({ where: { applicationId: id } })
+      await tx.auditLog.deleteMany({ where: { applicationId: id } })
+      await tx.application.delete({ where: { id } })
+    })
+
+    logger.info(`application deleted ${id} by ${userId}`)
+    res.json({ success: true, message: 'Application deleted' })
   } catch (err) {
     next(err)
   }
