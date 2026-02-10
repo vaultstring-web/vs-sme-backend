@@ -5,7 +5,7 @@ import { uploadUserDocuments } from '../config/multer'
 import { 
   requireAdmin, 
   requireAdminTier1, 
-  requireAdminTier2 
+  requireAdminTier2,
 } from '../middleware/authorize'
 
 import {
@@ -18,8 +18,9 @@ import {
   confirmPasswordReset,
   uploadUserDocumentsEndpoint,
   getUserDocuments,
-  
-  // Admin endpoints
+  getCurrentUser,
+  updateCurrentUser,
+  changePassword,
   adminRegister,
   listUsers,
   getUser,
@@ -35,6 +36,18 @@ router.post('/login', login)
 router.post('/refresh-token', refreshToken)
 router.post('/password-reset/request', requestPasswordReset)
 router.post('/password-reset/confirm', confirmPasswordReset)
+
+// ========== PROTECTED ROUTES (Require Authentication) ==========
+router.post('/logout', authenticate, logout)
+
+// Current user profile routes
+router.get('/users/me', authenticate, getCurrentUser)
+router.patch('/users/me', authenticate, updateCurrentUser)
+
+// Change password (authenticated user)
+router.post('/change-password', authenticate, changePassword)
+
+// User documents
 router.post(
   '/users/me/documents', 
   authenticate, 
@@ -48,9 +61,6 @@ router.get(
   getUserDocuments
 )
 
-// ========== PROTECTED ROUTES (Require Authentication) ==========
-router.post('/logout', authenticate, logout)
-
 // ========== ADMIN ROUTES ==========
 // User management (Admin Tier 1+)
 router.post('/admin/register', authenticate, requireAdminTier1, adminRegister)
@@ -63,6 +73,7 @@ router.patch('/admin/users/:id', authenticate, requireAdminTier1, updateUser)
 // User deletion (Admin Tier 2 only - more sensitive)
 router.delete('/admin/users/:id', authenticate, requireAdminTier2, deleteUser)
 
+// Admin access to user documents
 router.get(
   '/users/:id/documents', 
   authenticate, 

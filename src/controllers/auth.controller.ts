@@ -129,15 +129,6 @@ async function processUserDocuments(
 export async function register(req: Request, res: Response, next: NextFunction) {
   const startTime = Date.now()
   
-  // First, handle file upload using multer middleware
-  // We'll use a wrapper since multer is middleware
-  const uploadMiddleware = uploadUserDocuments
-  
-  // Since we can't use middleware directly in controller, 
-  // we'll create a separate endpoint for file uploads or modify the route
-  // For now, let's assume files come in as base64 or separate endpoint
-  
-  // Alternative approach: Handle files in a separate step
   try {
     const emailRaw = req.body?.email
     const password = req.body?.password
@@ -195,14 +186,27 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       await processBase64Documents(user.id, req.body.documents)
     }
 
+    // Generate authentication tokens for the new user
+    const { token: accessToken, jti: accessJti } = signAccessToken({ 
+      id: user.id, 
+      email: user.email, 
+      role: user.role 
+    })
+    
+    const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id)
+
     logger.info(`User registered successfully: ${user.id} - ${user.email}`, {
       userId: user.id,
       email: user.email,
       role: user.role,
+      accessJti,
+      refreshJti,
       duration: Date.now() - startTime
     })
 
     res.status(201).json({ 
+      accessToken,
+      refreshToken,
       profile: user,
       message: 'Registration successful. Please upload required documents.'
     })
@@ -223,6 +227,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     next(err)
   }
 }
+
 
 async function processBase64Documents(userId: string, documents: any[]): Promise<void> {
   const documentPromises = documents.map(async (doc: any) => {
@@ -283,7 +288,7 @@ export async function uploadUserDocumentsEndpoint(req: Request, res: Response, n
       profilePicture: 'PROFILE_PICTURE',
       proofOfAddress: 'PROOF_OF_ADDRESS',
       additionalDocuments: 'ADDITIONAL_DOCUMENT',
-    }
+    };
 
     await processUserDocuments(req.user.id, files, documentTypes)
 
@@ -1018,6 +1023,228 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
       error: err,
       deletedBy: req.user?.id,
       targetUser: req.params.id,
+      duration: Date.now() - startTime
+    })
+    next(err)
+  }
+}
+
+
+// Add this function to your auth.controller.ts file
+
+export async function getCurrentUser(req: Request, res: Response, next: NextFunction) {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401)
+    }
+
+    // Fetch full user profile from database
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        nationalIdOrPassport: true,
+        primaryPhone: true,
+        secondaryPhone: true,
+        physicalAddress: true,
+        postalAddress: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+
+    if (!user) {
+      logger.warn(`Get current user failed: User not found ${req.user.id}`)
+      throw new AppError('User not found', 404)
+    }
+
+    logger.info(`Current user retrieved: ${user.id}`, {
+      userId: user.id,
+      duration: Date.now() - startTime
+    })
+
+    res.json({ user })
+  } catch (err) {
+    logger.error(`Get current user failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+      error: err,
+      userId: req.user?.id,
+      duration: Date.now() - startTime
+    })
+    next(err)
+  }
+}
+
+// Add this function for updating current user profile
+export async function updateCurrentUser(req: Request, res: Response, next: NextFunction) {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401)
+    }
+
+    const updates: any = {}
+
+    // Only allow updating these fields
+    if (req.body.fullName !== undefined) {
+      if (!isNonEmptyString(req.body.fullName)) {
+        throw new AppError('fullName is required', 400)
+      }
+      updates.fullName = req.body.fullName.trim()
+    }
+    
+    if (req.body.primaryPhone !== undefined) {
+      if (!isNonEmptyString(req.body.primaryPhone)) {
+        throw new AppError('primaryPhone is required', 400)
+      }
+      updates.primaryPhone = req.body.primaryPhone.trim()
+    }
+    
+    if (req.body.secondaryPhone !== undefined) {
+      updates.secondaryPhone = isNonEmptyString(req.body.secondaryPhone) 
+        ? req.body.secondaryPhone.trim() 
+        : null
+    }
+    
+    if (req.body.physicalAddress !== undefined) {
+      if (!isNonEmptyString(req.body.physicalAddress)) {
+        throw new AppError('physicalAddress is required', 400)
+      }
+      updates.physicalAddress = req.body.physicalAddress.trim()
+    }
+    
+    if (req.body.postalAddress !== undefined) {
+      updates.postalAddress = isNonEmptyString(req.body.postalAddress) 
+        ? req.body.postalAddress.trim() 
+        : null
+    }
+
+    // Update user in database
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: updates,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        nationalIdOrPassport: true,
+        primaryPhone: true,
+        secondaryPhone: true,
+        physicalAddress: true,
+        postalAddress: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+
+    logger.info(`Current user updated: ${user.id}`, {
+      userId: user.id,
+      updates,
+      duration: Date.now() - startTime
+    })
+
+    res.json({ 
+      message: 'Profile updated successfully',
+      user 
+    })
+  } catch (err) {
+    if (prismaErrorCode(err) === 'P2025') {
+      logger.warn(`Update current user failed: User not found ${req.user?.id}`, {
+        duration: Date.now() - startTime
+      })
+      return next(new AppError('User not found', 404))
+    }
+    logger.error(`Update current user failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+      error: err,
+      userId: req.user?.id,
+      duration: Date.now() - startTime
+    })
+    next(err)
+  }
+}
+
+export async function changePassword(req: Request, res: Response, next: NextFunction) {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401)
+    }
+
+    const currentPassword = req.body?.currentPassword
+    const newPassword = req.body?.newPassword
+
+    logger.http(`Change password request for user: ${req.user.id}`)
+
+    // Validation
+    if (!isNonEmptyString(currentPassword)) {
+      logger.warn('Change password attempt without currentPassword')
+      throw new AppError('currentPassword is required', 400)
+    }
+    
+    if (!isNonEmptyString(newPassword)) {
+      logger.warn('Change password attempt without newPassword')
+      throw new AppError('newPassword is required', 400)
+    }
+    
+    if (newPassword.trim().length < 8) {
+      logger.warn('Change password attempt with password less than 8 characters')
+      throw new AppError('newPassword must be at least 8 characters', 400)
+    }
+
+    // Check if new password is different from current
+    if (currentPassword === newPassword) {
+      logger.warn('Change password attempt with same password')
+      throw new AppError('New password must be different from current password', 400)
+    }
+
+    // Fetch user with password hash
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, email: true, passwordHash: true },
+    })
+
+    if (!user) {
+      logger.warn(`Change password failed: User not found ${req.user.id}`)
+      throw new AppError('User not found', 404)
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!isCurrentPasswordValid) {
+      logger.warn(`Change password failed: Invalid current password for user ${user.id}`)
+      throw new AppError('Current password is incorrect', 401)
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 12)
+
+    // Update password
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newPasswordHash },
+    })
+
+    logger.info(`Password changed successfully for user: ${user.id}`, {
+      userId: user.id,
+      email: user.email,
+      duration: Date.now() - startTime
+    })
+
+    res.json({ 
+      success: true,
+      message: 'Password changed successfully' 
+    })
+  } catch (err) {
+    logger.error(`Change password failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+      error: err,
+      userId: req.user?.id,
       duration: Date.now() - startTime
     })
     next(err)
