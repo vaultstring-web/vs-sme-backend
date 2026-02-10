@@ -1,5 +1,6 @@
 import express, { Express } from 'express';
 import './types/express'; // Type definitions
+import './events/registerNotificationHandlers'
 import { setupSecurityMiddleware } from './middleware/security';
 import { successLogger, errorLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';

@@ -111,7 +111,7 @@ async function processUserDocuments(
       const fileUrl = `/uploads/${userId}/${file.filename}`
       
       documentPromises.push(
-        prisma.userDocument.create({
+        (prisma as any).userDocument.create({
           data: {
             userId,
             fileName: file.originalname,
@@ -248,7 +248,7 @@ async function processBase64Documents(userId: string, documents: any[]): Promise
     fs.writeFileSync(filePath, buffer)
 
     // Create database record
-    return prisma.userDocument.create({
+    return (prisma as any).userDocument.create({
       data: {
         userId,
         fileName: doc.fileName,
@@ -337,7 +337,7 @@ export async function getUserDocuments(req: Request, res: Response, next: NextFu
       throw new AppError('Invalid user ID format', 400)
     }
 
-    const documents = await prisma.userDocument.findMany({
+    const documents = await (prisma as any).userDocument.findMany({
       where: { 
         userId: userId // TypeScript now knows this is a string
       },
