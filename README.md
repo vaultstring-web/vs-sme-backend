@@ -39,10 +39,7 @@ Local Setup
    npm install
 
 3. Set up environment variables
-   A .env file is required. Create one by copying the example:
-   cp .env.example .env
-
-   Then edit .env with your local configuration:
+   A .env file is required. Create `.env` in the project root with your local configuration:
 
    PORT=3000
    NODE_ENV=development
@@ -63,7 +60,13 @@ Local Setup
    npm run db:generate
 
 6. Adding default Admin User
-   pnpm run create-admin
+   pnpm run seed:admin
+   or
+   npm run seed:admin
+
+   Default admin credentials (dev/test):
+   - Email: admin@example.com
+   - Password: AdminPass123!
 
 7. Start the development server
    pnpm run dev
@@ -95,15 +98,7 @@ Document Uploads
   - MAX_DOCUMENTS_PER_APPLICATION (default 20)
   - DOCUMENT_TYPE_ALLOWED mapping, e.g.:
     business_proof=application/pdf,image/png,image/jpeg;bank_statement=application/pdf
-
-Logging
-- Config via env:
-  - LOG_LEVEL=debug|info|warn|error
-  - LOG_FORMAT=pretty|json
-  - LOG_REQUEST_BODY=on|off (sanitized)
-- Request logs include: correlation ID, user id, method, url, status, duration, content length
-- Error logs include: correlation ID, user id, method, url, status, message, stack (in development)
-
+    
 Available Scripts
 
 The project uses pnpm by default, but these commands also work with npm or yarn:
@@ -116,8 +111,11 @@ The project uses pnpm by default, but these commands also work with npm or yarn:
 | Push DB schema      | pnpm run db:push         | npm run db:push          |
 | Regenerate Prisma   | pnpm run db:generate     | npm run db:generate      |
 | Open Prisma Studio  | pnpm run db:studio       | npm run db:studio        |
+| Seed default admin  | pnpm run seed:admin      | npm run seed:admin       |
+| Smoke test          | pnpm run smoke:test      | npm run smoke:test       |
 
 Note: Never commit .env – it's already in .gitignore.
+Note: The certs/ folder is ignored and may be generated locally for SMTP TLS (see Email Notifications).
 
 Project Structure
 
@@ -130,28 +128,6 @@ src/
 ├── utils/           # Helpers, custom errors
 ├── app.ts           # Express app factory
 └── server.ts        # Server entry point
-
-Testing
-The project includes automated unit and integration tests powered by Vitest and Supertest.
-
-To run the full test suite once:
-pnpm run test
-or
-npm run test
-
-To run tests in watch mode (re-runs on file changes):
-pnpm run test:watch
-or
-npm run test:watch
-
-A smoke test script is also available to verify basic API connectivity and auth flow:
-pnpm run smoke:test
-or
-npm run smoke:test
-
-All tests assume a clean test database. For local development, tests run against the same database defined in your .env file. In CI environments, a separate test DB URL should be configured.
-
-Make sure your database is up and seeded (if needed) before running tests.
 
 API Documentation
 

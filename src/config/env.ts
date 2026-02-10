@@ -19,5 +19,19 @@ export const env = {
       : 'http://localhost:3001,http://localhost:5173'),
   SECURE_COOKIES: process.env.NODE_ENV === 'production',
   SAME_SITE_COOKIE: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-  
+
+  EMAIL_ENABLED: String(process.env.EMAIL_ENABLED ?? '').trim().toLowerCase() === 'true',
+  EMAIL_FROM: process.env.EMAIL_FROM ?? process.env.FROM_EMAIL,
+  EMAIL_TO: process.env.EMAIL_TO ?? process.env.TO_EMAIL,
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS,
+  SMTP_SECURE: String(process.env.SMTP_SECURE ?? '').trim().toLowerCase() === 'true',
+  SMTP_TLS_SERVERNAME: process.env.SMTP_TLS_SERVERNAME,
+  SMTP_TLS_CA_FILE: process.env.SMTP_TLS_CA_FILE,
+  SMTP_TLS_REJECT_UNAUTHORIZED:
+    String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED ?? '').trim() === ''
+      ? true
+      : String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase() === 'true',
 };
