@@ -10,7 +10,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model UserDocument {
@@ -18,7 +19,7 @@ model UserDocument {
   userId        String
   user          User      @relation(fields: [userId], references: [id])
   fileName      String
-  fileUrl       String    // e.g., Google Drive shareable link or local path
+  fileUrl       String    @db.Text // e.g., Google Drive shareable link or local path
   documentType  String    // e.g., "national_id_front", "national_id_back", "profile_picture", "proof_of_address"
   uploadedAt    DateTime  @default(now())
   isVerified    Boolean   @default(false)
@@ -33,13 +34,13 @@ model UserDocument {
 model User {
   id                   String           @id @default(uuid())
   email                String           @unique
-  passwordHash         String
+  passwordHash         String           @db.Text
   fullName             String
   nationalIdOrPassport String
   primaryPhone         String
   secondaryPhone       String?
-  physicalAddress      String
-  postalAddress        String?
+  physicalAddress      String           @db.Text
+  postalAddress        String?          @db.Text
   documents            UserDocument[]
   role                 Role             @default(APPLICANT)
   createdAt            DateTime         @default(now())
@@ -106,16 +107,16 @@ model SmeApplicationData {
   loanProduct               String
   loanAmount                Float     // in MWK
   paybackPeriodMonths       Int
-  purposeOfLoan             String
+  purposeOfLoan             String    @db.Text
   repaymentMethod           String
   estimatedMonthlyTurnover  Float?
   estimatedMonthlyProfit    Float?
   groupName                 String?
   groupMemberCount          Int?
   hasOutstandingLoans       Boolean
-  outstandingLoanDetails    String?   // JSON or structured string
+  outstandingLoanDetails    String?   @db.Text // JSON or structured string
   hasDefaulted              Boolean
-  defaultExplanation        String?
+  defaultExplanation        String?   @db.Text
 
   // Timestamp is captured via Application.createdAt
 }
@@ -134,7 +135,7 @@ model PayrollApplicationData {
   loanAmount                Float     // in MWK
   paybackPeriodMonths       Int
   employerName              String
-  employerAddress           String
+  employerAddress           String    @db.Text
   jobTitle                  String
   employeeNumber            String
   dateOfEmployment          DateTime
@@ -143,9 +144,9 @@ model PayrollApplicationData {
   payrollDeductionConfirmed Boolean
 
   hasOutstandingLoans       Boolean
-  outstandingLoanDetails    String?   // Lender, amount, balance, repayment
+  outstandingLoanDetails    String?   @db.Text // Lender, amount, balance, repayment
   hasDefaulted              Boolean
-  defaultExplanation        String?
+  defaultExplanation        String?   @db.Text
 
   // Timestamp is captured via Application.createdAt
 }
@@ -155,7 +156,7 @@ model Document {
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id])
   fileName      String
-  fileUrl       String    // e.g., Google Drive shareable link
+  fileUrl       String    @db.Text // e.g., Google Drive shareable link
   documentType  String    // e.g., "national_id", "payslip", "business_proof"
   uploadedAt    DateTime  @default(now())
 
@@ -169,7 +170,7 @@ model AuditLog {
   actorId       String
   actor         User      @relation("ActorLogs", fields: [actorId], references: [id])
   action        String    // e.g., "SUBMITTED", "APPROVED", "REJECTED"
-  notes         String?
+  notes         String?   @db.Text
   timestamp     DateTime  @default(now())
 
   @@index([applicationId])

@@ -1,6 +1,6 @@
 import express, { Express } from 'express';
 import './types/express'; // Type definitions
-import './events/registerNotificationHandlers'
+import './events/registerNotificationHandlers';
 import { setupSecurityMiddleware } from './middleware/security';
 import { successLogger, errorLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
@@ -8,11 +8,15 @@ import routes from './routes';
 import path from 'path';
 import { correlationId } from './middleware/correlationId';
 
-// Import rate limiting
-import rateLimit from 'express-rate-limit';
-import { env } from './config/env'; // ← Import env config
+// Import rate limiters from dedicated file
+import { authLimiter } from './middleware/rateLimiter';
+
+import { env } from './config/env';
 
 const app: Express = express();
+
+// Trust proxy – necessary for accurate client IP behind a reverse proxy (e.g., nginx, cloudflare)
+app.set('trust proxy', 1); // adjust the number or use `true` if behind a single proxy
 
 // Logging
 app.use(successLogger);
@@ -26,30 +30,19 @@ app.use(correlationId);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ➕ Only apply rate limiting in non-test environments
+// ➕ Only apply rate limiting in non‑test environments
 if (env.NODE_ENV !== 'test') {
-  const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5,
-    message: 'Too many attempts, please try again after 15 minutes',
-    standardHeaders: true,
-  });
-
-  const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: true,
-  });
-
-  // Auth endpoints
+  // Apply auth rate limiter to authentication endpoints only
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth/password-reset/request', authLimiter);
   app.use('/api/auth/password-reset/confirm', authLimiter);
 
-  // General API
-  app.use('/api', apiLimiter);
+  // ⚠️  No global `/api` rate limiter is applied here.
+  //     Apply specific limiters (e.g., apiLimiter, strictLimiter) inside individual route files
+  //     to avoid double counting and to keep limits IP‑based.
 }
+
 app.use('/uploads', express.static(path.resolve('uploads')));
 
 // Routes

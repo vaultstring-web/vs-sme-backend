@@ -54,7 +54,9 @@ function createTransporter(cfg: EmailConfig): Transporter {
   }
 
   const ca =
-    cfg.tlsCaFile && cfg.tlsCaFile.trim().length > 0 ? fs.readFileSync(cfg.tlsCaFile, 'utf8') : undefined
+  cfg.tlsCaFile && cfg.tlsCaFile.trim().length > 0 && fs.existsSync(cfg.tlsCaFile)
+    ? fs.readFileSync(cfg.tlsCaFile, 'utf8')
+    : undefined
 
   return nodemailer.createTransport({
     host: cfg.host,

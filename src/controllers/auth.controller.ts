@@ -7,7 +7,6 @@ import { prisma } from '../db/prisma'
 import { AppError } from '../utils/AppError'
 import { signAccessToken, signRefreshToken } from '../services/jwt.service'
 import { generatePasswordResetToken, hashPasswordResetToken } from '../services/passwordReset.service'
-import { uploadUserDocuments } from '../config/multer'
 import fs from 'fs'
 import path from 'path'
 
@@ -160,7 +159,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const email = normalizeEmail(emailRaw)
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Create user first
+    // Create user
     const user = await prisma.user.create({
       data: {
         email,
@@ -181,10 +180,8 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       },
     })
 
-    // Process documents if any base64 files were provided
-    if (req.body.documents && Array.isArray(req.body.documents)) {
-      await processBase64Documents(user.id, req.body.documents)
-    }
+    // 🔥 Documents are no longer accepted during registration
+    // The entire base64 document upload logic has been removed.
 
     // Generate authentication tokens for the new user
     const { token: accessToken, jti: accessJti } = signAccessToken({ 
@@ -208,7 +205,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       accessToken,
       refreshToken,
       profile: user,
-      message: 'Registration successful. Please upload required documents.'
+      message: 'Registration successful.'
     })
   } catch (err) {
     const duration = Date.now() - startTime
@@ -780,9 +777,9 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
     
     if (search && typeof search === 'string') {
       where.OR = [
-        { email: { contains: search, mode: 'insensitive' } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { nationalIdOrPassport: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search } },
+        { fullName: { contains: search } },
+        { nationalIdOrPassport: { contains: search } },
       ]
     }
 

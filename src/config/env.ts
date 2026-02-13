@@ -15,7 +15,7 @@ export const env = {
   JWT_REFRESH_EXPIRY: (process.env.JWT_REFRESH_EXPIRY || '7d') as any,
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 
     (process.env.NODE_ENV === 'production' 
-      ? 'https://vaultstring.com,https://www.vaultstring.com,https://app.vaultstring.com'
+      ? 'https://thrive.vaultstring.com,https://vaultstring.com,https://www.vaultstring.com,https://app.vaultstring.com'
       : 'http://localhost:3001,http://localhost:5173'),
   SECURE_COOKIES: process.env.NODE_ENV === 'production',
   SAME_SITE_COOKIE: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',

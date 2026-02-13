@@ -51,9 +51,9 @@ function buildApplicationWhere(req: Request) {
     where.user = {
       is: {
         OR: [
-          { fullName: { contains: userName, mode: 'insensitive' } },
-          { email: { contains: userName, mode: 'insensitive' } },
-          { primaryPhone: { contains: userName, mode: 'insensitive' } },
+          { fullName: { contains: userName } },
+          { email: { contains: userName } },
+          { primaryPhone: { contains: userName } },
         ],
       },
     }
@@ -63,10 +63,10 @@ function buildApplicationWhere(req: Request) {
       smeData: {
         is: {
           OR: [
-            { businessName: { contains: q, mode: 'insensitive' } },
-            { registrationNo: { contains: q, mode: 'insensitive' } },
-            { loanProduct: { contains: q, mode: 'insensitive' } },
-            { purposeOfLoan: { contains: q, mode: 'insensitive' } },
+            { businessName: { contains: q } },
+            { registrationNo: { contains: q } },
+            { loanProduct: { contains: q } },
+            { purposeOfLoan: { contains: q } },
           ],
         },
       },
@@ -75,25 +75,25 @@ function buildApplicationWhere(req: Request) {
       payrollData: {
         is: {
           OR: [
-            { employerName: { contains: q, mode: 'insensitive' } },
-            { jobTitle: { contains: q, mode: 'insensitive' } },
-            { employeeNumber: { contains: q, mode: 'insensitive' } },
+            { employerName: { contains: q } },
+            { jobTitle: { contains: q } },
+            { employeeNumber: { contains: q } },
           ],
         },
       },
     }
     const appSearch = {
       OR: [
-        { id: { contains: q, mode: 'insensitive' } },
+        { id: { contains: q } },
         smeSearch,
         payrollSearch,
         {
           user: {
             is: {
               OR: [
-                { fullName: { contains: q, mode: 'insensitive' } },
-                { email: { contains: q, mode: 'insensitive' } },
-                { primaryPhone: { contains: q, mode: 'insensitive' } },
+                { fullName: { contains: q } },
+                { email: { contains: q } },
+                { primaryPhone: { contains: q } },
               ],
             },
           },
@@ -172,10 +172,10 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
     }
     if (q) {
       where.OR = [
-        { fullName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { primaryPhone: { contains: q, mode: 'insensitive' } },
-        { nationalIdOrPassport: { contains: q, mode: 'insensitive' } },
+        { fullName: { contains: q } },
+        { email: { contains: q } },
+        { primaryPhone: { contains: q } },
+        { nationalIdOrPassport: { contains: q } },
       ]
     }
 

@@ -1,5 +1,5 @@
 import { Router, type Router as ExpressRouter } from 'express'
-
+import { timeout } from '../middleware/timeout';
 import { authenticate } from '../middleware/authenticate'
 import { uploadUserDocuments } from '../config/multer'
 import { 
@@ -50,10 +50,11 @@ router.post('/change-password', authenticate, changePassword)
 // User documents
 router.post(
   '/users/me/documents', 
-  authenticate, 
+  authenticate,
+  timeout(5 * 60 * 1000),
   uploadUserDocuments,
   uploadUserDocumentsEndpoint
-)
+);
 
 router.get(
   '/users/me/documents', 
